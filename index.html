@@ -3,124 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ma Todo Claire & Violette</title>
+    <title>Ma Todo Cloud</title>
     <style>
-        /* Base et Reset */
+        /* Design Violet Pastel Lumineux */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-        body { 
-            font-family: 'Segoe UI', system-ui, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            padding: 20px; 
-            background-color: #faf9fe; /* Blanc avec une pointe de lavande */
-            margin: 0;
-            color: #4a4a4a;
-        }
-
-        .container { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 24px; 
-            box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); 
-            width: 100%;
-            max-width: 420px; 
-            margin-top: 40px;
-        }
-
-        h2 { 
-            text-align: left; 
-            margin-bottom: 25px; 
-            font-weight: 700; 
-            color: #6a1b9a; /* Violet plus clair et vibrant */
-            font-size: 1.6rem;
-        }
-
-        /* Barre de saisie */
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-        }
-
-        input { 
-            flex-grow: 1;
-            padding: 16px; 
-            border: 1.5px solid #f0eafc; 
-            border-radius: 16px; 
-            outline: none;
-            font-size: 16px;
-            background: #fdfcff;
-            transition: all 0.3s ease;
-        }
-
-        input:focus { 
-            border-color: #d1bdfc;
-            background: white;
-            box-shadow: 0 0 0 4px rgba(161, 0, 255, 0.05);
-        }
-
-        button#addBtn { 
-            width: 54px;
-            height: 54px;
-            cursor: pointer; 
-            background: #a100ff; 
-            color: white; 
-            border: none; 
-            border-radius: 16px; 
-            font-size: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, background 0.2s;
-        }
-
-        button#addBtn:active { transform: scale(0.9); background: #8200d1; }
-
-        /* Liste des tâches */
+        body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #faf9fe; margin: 0; color: #4a4a4a; }
+        .container { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); width: 100%; max-width: 420px; margin-top: 40px; }
+        h2 { text-align: left; margin-bottom: 25px; font-weight: 700; color: #6a1b9a; font-size: 1.6rem; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 30px; }
+        input { flex-grow: 1; padding: 16px; border: 1.5px solid #f0eafc; border-radius: 16px; outline: none; font-size: 16px; background: #fdfcff; transition: all 0.3s ease; }
+        input:focus { border-color: #d1bdfc; background: white; box-shadow: 0 0 0 4px rgba(161, 0, 255, 0.05); }
+        button#addBtn { width: 54px; height: 54px; cursor: pointer; background: #a100ff; color: white; border: none; border-radius: 16px; font-size: 28px; display: flex; align-items: center; justify-content: center; }
         ul { list-style: none; padding: 0; margin: 0; }
-
-        li { 
-            background: #ffffff; 
-            margin-bottom: 12px; 
-            padding: 18px; 
-            border: 1px solid #f0eafc;
-            border-radius: 18px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            font-size: 16px;
-            color: #555;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-            transition: all 0.3s ease;
-            
-            /* Gestion texte long */
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-
-        /* Animation au clic pour supprimer */
-        li:active { 
-            background: #fdfaff;
-            border-color: #d1bdfc;
-        }
-
-        /* Icône de suppression stylisée */
-        li::after {
-            content: '✕';
-            font-size: 12px;
-            color: #a100ff;
-            background: #f5efff;
-            width: 26px;
-            height: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            margin-left: 15px;
-            flex-shrink: 0;
-        }
+        li { background: #ffffff; margin-bottom: 12px; padding: 18px; border: 1px solid #f0eafc; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,0.02); transition: all 0.3s ease; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+        li:active { transform: scale(0.95); background: #fdfaff; }
+        li::after { content: '✕'; font-size: 12px; color: #a100ff; background: #f5efff; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-left: 15px; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -134,54 +31,58 @@
     <ul id="taskList"></ul>
 </div>
 
-<script>
-    const taskInput = document.getElementById('taskInput');
-    const taskList = document.getElementById('taskList');
+<script type="module">
+  // On importe les outils Firebase nécessaires
+  import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
-    // Charger les données stockées
-    window.onload = function() {
-        const savedTasks = JSON.parse(localStorage.getItem('lightPurpleTodo')) || [];
-        savedTasks.forEach(text => renderTask(text));
-    };
+  // --- ÉTAPE CRUCIALE : COLLE TON CONFIG ICI ---
+  const firebaseConfig = {
+    apiKey: "COLLE_ICI",
+    authDomain: "COLLE_ICI",
+    databaseURL: "COLLE_ICI",
+    projectId: "COLLE_ICI",
+    storageBucket: "COLLE_ICI",
+    messagingSenderId: "COLLE_ICI",
+    appId: "COLLE_ICI"
+  };
+  // ----------------------------------------------
 
-    function addTask() {
-        const text = taskInput.value.trim();
-        if (text !== "") {
-            renderTask(text);
-            saveToLocalStorage();
-            taskInput.value = "";
-            taskInput.focus();
-        }
-    }
+  // Initialisation de Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const tasksRef = ref(db, 'tasks');
 
-    function renderTask(text) {
+  const taskInput = document.getElementById('taskInput');
+  const taskList = document.getElementById('taskList');
+
+  // Écouter les changements en temps réel
+  onValue(tasksRef, (snapshot) => {
+    taskList.innerHTML = "";
+    const data = snapshot.val();
+    if (data) {
+      Object.keys(data).forEach(id => {
         const li = document.createElement('li');
-        li.textContent = text;
-        
-        li.onclick = function() {
-            // Effet visuel fluide
-            this.style.opacity = '0';
-            this.style.transform = 'scale(0.95)';
-            setTimeout(() => {
-                this.remove();
-                saveToLocalStorage();
-            }, 200);
-        };
-
+        li.textContent = data[id].text;
+        li.onclick = () => remove(ref(db, `tasks/${id}`));
         taskList.appendChild(li);
+      });
     }
+  });
 
-    function saveToLocalStorage() {
-        const tasks = [];
-        document.querySelectorAll('#taskList li').forEach(li => {
-            tasks.push(li.textContent);
-        });
-        localStorage.setItem('lightPurpleTodo', JSON.stringify(tasks));
+  // Fonction pour ajouter
+  window.addTask = function() {
+    const text = taskInput.value.trim();
+    if (text !== "") {
+      push(tasksRef, { text: text });
+      taskInput.value = "";
     }
+  };
 
-    taskInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addTask();
-    });
+  // Gérer la touche Entrée
+  taskInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addTask();
+  });
 </script>
 
 </body>
