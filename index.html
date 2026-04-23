@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ma Todo Cloud</title>
+    <title>TODO ACN</title>
     <style>
-        /* Design Violet Pastel (Inspiration Accenture) */
+        /* Design Violet Pastel */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body { 
@@ -57,7 +57,7 @@
         li { 
             background: #ffffff; 
             margin-bottom: 12px; 
-            padding: 18px; 
+            padding: 14px 18px; 
             border: 1px solid #f0eafc; 
             border-radius: 18px; 
             display: flex; 
@@ -66,19 +66,37 @@
             font-size: 16px; 
             color: #555; 
             box-shadow: 0 2px 8px rgba(0,0,0,0.02); 
-            transition: all 0.2s ease; 
             white-space: pre-wrap; 
             word-wrap: break-word; 
             overflow-wrap: break-word; 
         }
 
-        li:active { transform: scale(0.96); background: #fdfaff; }
+        /* Style pour la zone de texte (ne fait rien au clic maintenant) */
+        .task-text {
+            flex-grow: 1;
+            padding-right: 10px;
+        }
 
-        li::after { 
-            content: '✕'; font-size: 12px; color: #a100ff; 
-            background: #f5efff; width: 28px; height: 28px; 
-            display: flex; align-items: center; justify-content: center; 
-            border-radius: 50%; margin-left: 15px; flex-shrink: 0; 
+        /* Style pour le bouton de suppression (la croix) */
+        .delete-btn {
+            cursor: pointer;
+            font-size: 14px;
+            color: #a100ff;
+            background: #f5efff;
+            width: 32px; /* Un peu plus large pour le doigt */
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .delete-btn:active {
+            background: #ff3b30;
+            color: white;
+            transform: scale(1.1);
         }
     </style>
 </head>
@@ -94,11 +112,9 @@
 </div>
 
 <script type="module">
-  // Importation des modules Firebase
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
   import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
-  // Ta configuration Firebase spécifique
   const firebaseConfig = {
     apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
     authDomain: "todolist-93c54.firebaseapp.com",
@@ -110,7 +126,6 @@
     measurementId: "G-2E81BKPG30"
   };
 
-  // Initialisation
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const tasksRef = ref(db, 'tasks');
@@ -118,22 +133,39 @@
   const taskInput = document.getElementById('taskInput');
   const taskList = document.getElementById('taskList');
 
-  // Écouter la base de données (Sync en temps réel)
   onValue(tasksRef, (snapshot) => {
     taskList.innerHTML = "";
     const data = snapshot.val();
     if (data) {
       Object.keys(data).forEach(id => {
         const li = document.createElement('li');
-        li.textContent = data[id].text;
-        // Supprimer au clic
-        li.onclick = () => remove(ref(db, `tasks/${id}`));
+        
+        // Création du texte de la tâche
+        const spanText = document.createElement('span');
+        spanText.className = "task-text";
+        spanText.textContent = data[id].text;
+
+        // Création du bouton supprimer (la croix)
+        const delBtn = document.createElement('div');
+        delBtn.className = "delete-btn";
+        delBtn.innerHTML = "✕";
+        
+        // Seule la croix déclenche la suppression
+        delBtn.onclick = () => {
+            li.style.opacity = '0';
+            li.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                remove(ref(db, `tasks/${id}`));
+            }, 200);
+        };
+
+        li.appendChild(spanText);
+        li.appendChild(delBtn);
         taskList.appendChild(li);
       });
     }
   });
 
-  // Ajouter une tâche (attaché à window pour être accessible par le bouton)
   window.addTask = function() {
     const text = taskInput.value.trim();
     if (text !== "") {
@@ -143,7 +175,6 @@
     }
   };
 
-  // Support de la touche Entrée
   taskInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addTask();
   });
