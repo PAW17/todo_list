@@ -5,19 +5,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ma Todo Cloud</title>
     <style>
-        /* Design Violet Pastel Lumineux */
+        /* Design Violet Pastel (Inspiration Accenture) */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #faf9fe; margin: 0; color: #4a4a4a; }
-        .container { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); width: 100%; max-width: 420px; margin-top: 40px; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            padding: 20px; 
+            background-color: #faf9fe; 
+            margin: 0;
+            color: #4a4a4a;
+        }
+
+        .container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 24px; 
+            box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); 
+            width: 100%;
+            max-width: 420px; 
+            margin-top: 20px;
+        }
+
         h2 { text-align: left; margin-bottom: 25px; font-weight: 700; color: #6a1b9a; font-size: 1.6rem; }
+
         .input-group { display: flex; gap: 10px; margin-bottom: 30px; }
-        input { flex-grow: 1; padding: 16px; border: 1.5px solid #f0eafc; border-radius: 16px; outline: none; font-size: 16px; background: #fdfcff; transition: all 0.3s ease; }
-        input:focus { border-color: #d1bdfc; background: white; box-shadow: 0 0 0 4px rgba(161, 0, 255, 0.05); }
-        button#addBtn { width: 54px; height: 54px; cursor: pointer; background: #a100ff; color: white; border: none; border-radius: 16px; font-size: 28px; display: flex; align-items: center; justify-content: center; }
+
+        input { 
+            flex-grow: 1; 
+            padding: 16px; 
+            border: 1.5px solid #f0eafc; 
+            border-radius: 16px; 
+            outline: none; 
+            font-size: 16px; 
+            background: #fdfcff; 
+            transition: all 0.3s ease; 
+        }
+
+        input:focus { border-color: #d1bdfc; background: white; }
+
+        button#addBtn { 
+            width: 54px; height: 54px; cursor: pointer; 
+            background: #a100ff; color: white; border: none; 
+            border-radius: 16px; font-size: 28px; 
+            display: flex; align-items: center; justify-content: center; 
+        }
+
         ul { list-style: none; padding: 0; margin: 0; }
-        li { background: #ffffff; margin-bottom: 12px; padding: 18px; border: 1px solid #f0eafc; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,0.02); transition: all 0.3s ease; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
-        li:active { transform: scale(0.95); background: #fdfaff; }
-        li::after { content: '✕'; font-size: 12px; color: #a100ff; background: #f5efff; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-left: 15px; flex-shrink: 0; }
+
+        li { 
+            background: #ffffff; 
+            margin-bottom: 12px; 
+            padding: 18px; 
+            border: 1px solid #f0eafc; 
+            border-radius: 18px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 16px; 
+            color: #555; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02); 
+            transition: all 0.2s ease; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            overflow-wrap: break-word; 
+        }
+
+        li:active { transform: scale(0.96); background: #fdfaff; }
+
+        li::after { 
+            content: '✕'; font-size: 12px; color: #a100ff; 
+            background: #f5efff; width: 28px; height: 28px; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 50%; margin-left: 15px; flex-shrink: 0; 
+        }
     </style>
 </head>
 <body>
@@ -32,30 +94,23 @@
 </div>
 
 <script type="module">
-  // On importe les outils Firebase nécessaires
+  // Importation des modules Firebase
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
   import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
-  // --- ÉTAPE CRUCIALE : COLLE TON CONFIG ICI ---
- // Import the functions you need from the SDKs you need
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
-  authDomain: "todolist-93c54.firebaseapp.com",
-  databaseURL: "https://todolist-93c54-default-rtdb.firebaseio.com",
-  projectId: "todolist-93c54",
-  storageBucket: "todolist-93c54.firebasestorage.app",
-  messagingSenderId: "944974392488",
-  appId: "1:944974392488:web:0dc9a1fb2fb8733f31e69d",
-  measurementId: "G-2E81BKPG30"
-};;
+  // Ta configuration Firebase spécifique
+  const firebaseConfig = {
+    apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
+    authDomain: "todolist-93c54.firebaseapp.com",
+    databaseURL: "https://todolist-93c54-default-rtdb.firebaseio.com",
+    projectId: "todolist-93c54",
+    storageBucket: "todolist-93c54.firebasestorage.app",
+    messagingSenderId: "944974392488",
+    appId: "1:944974392488:web:0dc9a1fb2fb8733f31e69d",
+    measurementId: "G-2E81BKPG30"
+  };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-  // ----------------------------------------------
-
-  // Initialisation de Firebase
+  // Initialisation
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const tasksRef = ref(db, 'tasks');
@@ -63,7 +118,7 @@ const analytics = getAnalytics(app);
   const taskInput = document.getElementById('taskInput');
   const taskList = document.getElementById('taskList');
 
-  // Écouter les changements en temps réel
+  // Écouter la base de données (Sync en temps réel)
   onValue(tasksRef, (snapshot) => {
     taskList.innerHTML = "";
     const data = snapshot.val();
@@ -71,22 +126,24 @@ const analytics = getAnalytics(app);
       Object.keys(data).forEach(id => {
         const li = document.createElement('li');
         li.textContent = data[id].text;
+        // Supprimer au clic
         li.onclick = () => remove(ref(db, `tasks/${id}`));
         taskList.appendChild(li);
       });
     }
   });
 
-  // Fonction pour ajouter
+  // Ajouter une tâche (attaché à window pour être accessible par le bouton)
   window.addTask = function() {
     const text = taskInput.value.trim();
     if (text !== "") {
       push(tasksRef, { text: text });
       taskInput.value = "";
+      taskInput.focus();
     }
   };
 
-  // Gérer la touche Entrée
+  // Support de la touche Entrée
   taskInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addTask();
   });
