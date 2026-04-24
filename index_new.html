@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ma Todo Cloud - Drag & Drop</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        /* On garde ton thème violet Accenture */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #faf9fe; margin: 0; color: #4a4a4a; }
+        .container { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); width: 100%; max-width: 420px; margin-top: 20px; }
+        h2 { text-align: left; margin-bottom: 25px; font-weight: 700; color: #6a1b9a; font-size: 1.6rem; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 30px; }
+        input { flex-grow: 1; padding: 16px; border: 1.5px solid #f0eafc; border-radius: 16px; outline: none; font-size: 16px; background: #fdfcff; }
+        button#addBtn { width: 54px; height: 54px; cursor: pointer; background: #a100ff; color: white; border: none; border-radius: 16px; font-size: 28px; display: flex; align-items: center; justify-content: center; }
+        
+        ul { list-style: none; padding: 0; margin: 0; }
+
+        /* Style des éléments de liste */
+        li { 
+            background: #ffffff; 
+            margin-bottom: 12px; 
+            padding: 14px 18px; 
+            border: 1px solid #f0eafc; 
+            border-radius: 18px; 
+            display: flex; 
+            align-items: center; 
+            font-size: 16px; 
+            color: #555; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            cursor: grab; /* Curseur main pour laptop */
+        }
+
+        /* Style quand on déplace la tâche */
+        .sortable-ghost { opacity: 0.4; background: #f0eafc !important; }
+        .sortable-chosen { box-shadow: 0 10px 20px rgba(161, 0, 255, 0.2); }
+
+        /* Poignée pour le tactile */
+        .handle {
+            color: #d1bdfc;
+            margin-right: 15px;
+            cursor: grab;
+            font-size: 20px;
+            user-select: none;
+        }
+
+        .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+
+        .delete-btn {
+            cursor: pointer; font-size: 14px; color: #a100ff; background: #f5efff;
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; flex-shrink: 0; margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Ma Liste</h2>
+    <div class="input-group">
+        <input type="text" id="taskInput" placeholder="Nouvelle tâche..." autocomplete="off">
+        <button id="addBtn" onclick="addTask()">+</button>
+    </div>
+    <ul id="taskList"></ul>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, push, onValue, remove, set } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
+    authDomain: "todolist-93c54.firebaseapp.com",
+    databaseURL: "https://todolist-93c54-default-rtdb.firebaseio.com",
+    projectId: "todolist-93c54",
+    storageBucket: "todolist-93c54.firebasestorage.app",
+    messagingSenderId: "944974392488",
+    appId: "1:944974392488:web:0dc9a1fb2fb8733f31e69d",
+    measurementId: "G-2E81BKPG30"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const tasksRef = ref(db, 'tasks');
+  const taskList = document.getElementById('taskList');
+  const taskInput = document.getElementById('taskInput');
+
+  // INITIALISATION DE SORTABLE
+  const sortable = Sortable.create(taskList, {
+    animation: 150,
+    handle: '.handle', // On utilise la poignée pour déplacer
+    ghostClass: 'sortable-ghost',
+    onEnd: function() {
+        saveNewOrder(); // Quand on lâche la tâche, on sauvegarde l'ordre
+    }
+  });
+
+  // 1. Charger les tâches (une seule fois pour éviter les sauts visuels pendant le drag)
+  onValue(tasksRef, (snapshot) => {
+    // Si on est en train de déplacer, on ne rafraîchit pas pour éviter les bugs visuels
+    if (document.querySelector('.sortable-chosen')) return;
+
+    taskList.innerHTML = "";
+    const data = snapshot.val();
+    if (data) {
+      // Firebase stocke en objet, on transforme en tableau pour l'ordre
+      const items = Object.keys(data).map(id => ({ id, ...data[id] }));
+      
+      // On affiche dans l'ordre stocké (Firebase gère les clés chronologiques par défaut)
+      items.forEach(item => renderTask(item.id, item.text));
+    }
+  }, { onlyOnce: false });
+
+  function renderTask(id, text) {
+    const li = document.createElement('li');
+    li.dataset.id = id; // On stocke l'ID Firebase dans l'élément HTML
+
+    li.innerHTML = `
+        <div class="handle">☰</div>
+        <span class="task-text">${text}</span>
+        <div class="delete-btn" onclick="deleteTask('${id}')">✕</div>
+    `;
+    taskList.appendChild(li);
+  }
+
+  // 2. Sauvegarder le nouvel ordre dans Firebase
+  function saveNewOrder() {
+    const tasks = {};
+    document.querySelectorAll('#taskList li').forEach((li, index) => {
+        const id = li.dataset.id;
+        const text = li.querySelector('.task-text').textContent;
+        // On recrée l'objet complet. Note: Firebase ne gère pas nativement l'index "ordre", 
+        // on ré-écrase donc le noeud 'tasks' avec le nouvel ordre.
+        tasks[id] = { text: text };
+    });
+    set(tasksRef, tasks);
+  }
+
+  window.addTask = function() {
+    const text = taskInput.value.trim();
+    if (text !== "") {
+      push(tasksRef, { text: text });
+      taskInput.value = "";
+    }
+  };
+
+  window.deleteTask = function(id) {
+    remove(ref(db, `tasks/${id}`));
+  };
+
+  taskInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
+</script>
+
+</body>
+</html>
