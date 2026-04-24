@@ -6,9 +6,8 @@
     <title>TODO</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        /* On garde ton thème violet Accenture */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #faf9fe; margin: 0; color: #4a4a4a; }
+        body { font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #faf9fe; margin: 0; color: #4a4a4a; overflow-x: hidden; }
         .container { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(161, 0, 255, 0.05); width: 100%; max-width: 420px; margin-top: 20px; }
         h2 { text-align: left; margin-bottom: 25px; font-weight: 700; color: #6a1b9a; font-size: 1.6rem; }
         .input-group { display: flex; gap: 10px; margin-bottom: 30px; }
@@ -17,7 +16,6 @@
         
         ul { list-style: none; padding: 0; margin: 0; }
 
-        /* Style des éléments de liste */
         li { 
             background: #ffffff; 
             margin-bottom: 12px; 
@@ -29,50 +27,34 @@
             font-size: 16px; 
             color: #555; 
             box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-            cursor: grab; /* Curseur main pour laptop */
+            transition: transform 0.2s ease, opacity 0.2s ease; /* Pour l'animation de swipe */
+            position: relative;
+            touch-action: pan-y; /* Permet le défilement vertical tout en capturant le horizontal */
         }
 
-        /* Style quand on déplace la tâche */
-        .sortable-ghost { opacity: 0.4; background: #f0eafc !important; }
-        .sortable-chosen { box-shadow: 0 10px 20px rgba(161, 0, 255, 0.2); }
-
-        /* Style de la poignée (les 3 bandes) */
         .handle {
             color: #d1bdfc;
             margin-right: 15px;
             font-size: 18px;
             user-select: none;
-            cursor: move; /* Remplace la main par une icône de déplacement (croix fléchée) */
+            cursor: move;
             padding: 5px;
-            transition: all 0.2s ease;
             display: flex;
             align-items: center;
         }
         
-        /* Effet quand on survole la poignée avec la souris */
-        .handle:hover {
-            color: #a100ff;
-            transform: scale(1.2);
-        }
+        .handle:hover { color: #a100ff; transform: scale(1.2); }
         
-        /* Style quand on est en train de déplacer (sur toute la ligne) */
-        li { 
-            /* ... tes autres propriétés ... */
-            cursor: default; /* On remet le curseur normal sur le texte */
-        }
-        
-        /* On peut aussi changer le curseur quand on clique et qu'on déplace */
-        .sortable-chosen {
-            cursor: grabbing !important; /* La main qui se ferme quand on déplace */
-            box-shadow: 0 10px 25px rgba(161, 0, 255, 0.15);
-        }
+        .sortable-ghost { opacity: 0.4; background: #f0eafc !important; }
+        .sortable-chosen { cursor: grabbing !important; box-shadow: 0 10px 25px rgba(161, 0, 255, 0.15); }
 
-        .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+        .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; pointer-events: none; }
 
         .delete-btn {
             cursor: pointer; font-size: 14px; color: #a100ff; background: #f5efff;
             width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
             border-radius: 50%; flex-shrink: 0; margin-left: 10px;
+            z-index: 10;
         }
     </style>
 </head>
@@ -108,52 +90,81 @@
   const taskList = document.getElementById('taskList');
   const taskInput = document.getElementById('taskInput');
 
-  // INITIALISATION DE SORTABLE
   const sortable = Sortable.create(taskList, {
     animation: 150,
-    handle: '.handle', // On utilise la poignée pour déplacer
+    handle: '.handle',
     ghostClass: 'sortable-ghost',
-    onEnd: function() {
-        saveNewOrder(); // Quand on lâche la tâche, on sauvegarde l'ordre
-    }
+    onEnd: function() { saveNewOrder(); }
   });
 
-  // 1. Charger les tâches (une seule fois pour éviter les sauts visuels pendant le drag)
   onValue(tasksRef, (snapshot) => {
-    // Si on est en train de déplacer, on ne rafraîchit pas pour éviter les bugs visuels
     if (document.querySelector('.sortable-chosen')) return;
-
     taskList.innerHTML = "";
     const data = snapshot.val();
     if (data) {
-      // Firebase stocke en objet, on transforme en tableau pour l'ordre
       const items = Object.keys(data).map(id => ({ id, ...data[id] }));
-      
-      // On affiche dans l'ordre stocké (Firebase gère les clés chronologiques par défaut)
       items.forEach(item => renderTask(item.id, item.text));
     }
-  }, { onlyOnce: false });
+  });
 
-  function renderTask(id, text) {
+function renderTask(id, text) {
     const li = document.createElement('li');
-    li.dataset.id = id; // On stocke l'ID Firebase dans l'élément HTML
+    li.dataset.id = id;
 
     li.innerHTML = `
         <div class="handle">⋮⋮</div>
         <span class="task-text">${text}</span>
         <div class="delete-btn" onclick="deleteTask('${id}')">✕</div>
     `;
-    taskList.appendChild(li);
-  }
 
-  // 2. Sauvegarder le nouvel ordre dans Firebase
+    let startX = 0;
+    let currentX = 0;
+
+    li.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        li.style.transition = 'none'; 
+    }, {passive: true});
+
+    li.addEventListener('touchmove', (e) => {
+        currentX = e.touches[0].clientX;
+        const diff = currentX - startX;
+        
+        // On déplace l'élément selon la valeur de diff (positif ou négatif)
+        li.style.transform = `translateX(${diff}px)`;
+        
+        // L'opacité baisse peu importe le sens du glissement
+        const opacity = 1 - (Math.abs(diff) / 300);
+        li.style.opacity = opacity > 0 ? opacity : 0;
+    }, {passive: true});
+
+    li.addEventListener('touchend', () => {
+        li.style.transition = 'all 0.3s ease';
+        const diff = currentX - startX;
+
+        // Si on dépasse 100px à droite OU -100px à gauche
+        if (Math.abs(diff) > 100) { 
+            // On éjecte du côté où l'utilisateur a glissé
+            const direction = diff > 0 ? '150%' : '-150%';
+            li.style.transform = `translateX(${direction})`;
+            li.style.opacity = '0';
+            setTimeout(() => deleteTask(id), 300);
+        } else {
+            // Retour au centre
+            li.style.transform = 'translateX(0)';
+            li.style.opacity = '1';
+        }
+        startX = 0;
+        currentX = 0;
+    });
+
+    taskList.appendChild(li);
+}
+
   function saveNewOrder() {
     const tasks = {};
-    document.querySelectorAll('#taskList li').forEach((li, index) => {
+    document.querySelectorAll('#taskList li').forEach((li) => {
         const id = li.dataset.id;
         const text = li.querySelector('.task-text').textContent;
-        // On recrée l'objet complet. Note: Firebase ne gère pas nativement l'index "ordre", 
-        // on ré-écrase donc le noeud 'tasks' avec le nouvel ordre.
         tasks[id] = { text: text };
     });
     set(tasksRef, tasks);
