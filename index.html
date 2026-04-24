@@ -36,13 +36,35 @@
         .sortable-ghost { opacity: 0.4; background: #f0eafc !important; }
         .sortable-chosen { box-shadow: 0 10px 20px rgba(161, 0, 255, 0.2); }
 
-        /* Poignée pour le tactile */
+        /* Style de la poignée (les 3 bandes) */
         .handle {
             color: #d1bdfc;
             margin-right: 15px;
-            cursor: grab;
-            font-size: 20px;
+            font-size: 18px;
             user-select: none;
+            cursor: move; /* Remplace la main par une icône de déplacement (croix fléchée) */
+            padding: 5px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Effet quand on survole la poignée avec la souris */
+        .handle:hover {
+            color: #a100ff;
+            transform: scale(1.2);
+        }
+        
+        /* Style quand on est en train de déplacer (sur toute la ligne) */
+        li { 
+            /* ... tes autres propriétés ... */
+            cursor: default; /* On remet le curseur normal sur le texte */
+        }
+        
+        /* On peut aussi changer le curseur quand on clique et qu'on déplace */
+        .sortable-chosen {
+            cursor: grabbing !important; /* La main qui se ferme quand on déplace */
+            box-shadow: 0 10px 25px rgba(161, 0, 255, 0.15);
         }
 
         .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
