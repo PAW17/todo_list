@@ -184,14 +184,28 @@
     set(tasksRef, updates);
   }
 
-  window.addTask = function() {
+window.addTask = function() {
     const text = taskInput.value.trim();
     if (text !== "") {
-      const nextOrder = document.querySelectorAll('#taskList li').length;
-      push(tasksRef, { text: text, order: nextOrder });
-      taskInput.value = "";
+        // On récupère toutes les tâches actuelles pour compter
+        const currentTasks = document.querySelectorAll('#taskList li');
+        let nextOrder = 0;
+
+        if (currentTasks.length > 0) {
+            // On prend l'ordre de la dernière tâche et on ajoute 1
+            // C'est plus sûr que de juste compter la longueur
+            nextOrder = currentTasks.length;
+        }
+
+        push(tasksRef, { 
+            text: text, 
+            order: nextOrder 
+        });
+        
+        taskInput.value = "";
+        taskInput.focus();
     }
-  };
+};
 
   window.deleteTask = function(id) {
     remove(ref(db, `tasks/${id}`));
