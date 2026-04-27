@@ -33,11 +33,10 @@
         }
 
         .handle { color: #d1bdfc; margin-right: 15px; font-size: 18px; user-select: none; cursor: move; padding: 5px; display: flex; align-items: center; }
-        .handle:hover { color: #a100ff; transform: scale(1.2); }
         .sortable-ghost { opacity: 0.4; background: #f0eafc !important; }
         .sortable-chosen { cursor: grabbing !important; box-shadow: 0 10px 25px rgba(161, 0, 255, 0.15); }
 
-        .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; cursor: pointer; }
+        .task-text { flex-grow: 1; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; cursor: pointer; min-height: 24px; }
 
         .delete-btn {
             cursor: pointer; font-size: 14px; color: #a100ff; background: #f5efff;
@@ -80,7 +79,7 @@
   const taskList = document.getElementById('taskList');
   const taskInput = document.getElementById('taskInput');
 
-  const sortable = Sortable.create(taskList, {
+  Sortable.create(taskList, {
     animation: 150,
     handle: '.handle',
     ghostClass: 'sortable-ghost',
@@ -108,11 +107,17 @@
 
     const spanText = li.querySelector('.task-text');
 
-    // --- LOGIQUE DE MODIFICATION (EDIT) ---
+    // MODIFICATION AU CLIC
     spanText.onclick = (e) => {
+        e.stopPropagation();
         const currentText = spanText.textContent;
-        spanText.innerHTML = `<input type="text" class="edit-input" value="${currentText}">`;
-        const input = spanText.querySelector('.edit-input');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'edit-input';
+        input.value = currentText;
+        
+        spanText.innerHTML = '';
+        spanText.appendChild(input);
         input.focus();
 
         const saveEdit = () => {
@@ -124,13 +129,13 @@
             }
         };
 
-        input.onkeydown = (e) => { if (e.key === 'Enter') saveEdit(); };
+        input.onkeydown = (ev) => { if (ev.key === 'Enter') saveEdit(); };
         input.onblur = saveEdit;
     };
 
-    // --- LOGIQUE DU SWIPE BIDIRECTIONNEL ---
+    // SWIPE SECURISE
     let startX = 0;
-    let currentX = 0;
+    let isSwiping = false;
 
     li.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
@@ -138,16 +143,23 @@
     }, {passive: true});
 
     li.addEventListener('touchmove', (e) => {
-        currentX = e.touches[0].clientX;
-        const diff = currentX - startX;
-        li.style.transform = `translateX(${diff}px)`;
-        li.style.opacity = 1 - (Math.abs(diff) / 300);
+        let currentX = e.touches[0].clientX;
+        let diff = currentX - startX;
+        
+        // On ne déclenche le swipe que si on dépasse 10px de mouvement
+        if (Math.abs(diff) > 10) {
+            isSwiping = true;
+            li.style.transform = `translateX(${diff}px)`;
+            li.style.opacity = 1 - (Math.abs(diff) / 300);
+        }
     }, {passive: true});
 
-    li.addEventListener('touchend', () => {
+    li.addEventListener('touchend', (e) => {
         li.style.transition = 'all 0.3s ease';
-        const diff = currentX - startX;
-        if (Math.abs(diff) > 100) { 
+        let endX = e.changedTouches[0].clientX;
+        let diff = endX - startX;
+
+        if (isSwiping && Math.abs(diff) > 100) { 
             const direction = diff > 0 ? '150%' : '-150%';
             li.style.transform = `translateX(${direction})`;
             li.style.opacity = '0';
@@ -156,7 +168,7 @@
             li.style.transform = 'translateX(0)';
             li.style.opacity = '1';
         }
-        startX = 0; currentX = 0;
+        isSwiping = false;
     });
 
     taskList.appendChild(li);
@@ -165,10 +177,9 @@
   function saveNewOrder() {
     const updates = {};
     document.querySelectorAll('#taskList li').forEach((li, index) => {
-        updates[li.dataset.id] = { 
-            text: li.querySelector('.task-text').textContent,
-            order: index 
-        };
+        const id = li.dataset.id;
+        const text = li.querySelector('.task-text').textContent;
+        updates[id] = { text: text, order: index };
     });
     set(tasksRef, updates);
   }
@@ -176,8 +187,8 @@
   window.addTask = function() {
     const text = taskInput.value.trim();
     if (text !== "") {
-      const newOrder = document.querySelectorAll('#taskList li').length;
-      push(tasksRef, { text: text, order: newOrder });
+      const nextOrder = document.querySelectorAll('#taskList li').length;
+      push(tasksRef, { text: text, order: nextOrder });
       taskInput.value = "";
     }
   };
