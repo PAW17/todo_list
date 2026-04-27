@@ -56,6 +56,18 @@
             border-radius: 50%; flex-shrink: 0; margin-left: 10px;
             z-index: 10;
         }
+
+        .edit-input {
+            width: 100%;
+            border: none;
+            background: #f0eafc;
+            font-family: inherit;
+            font-size: inherit;
+            color: #4a4a4a;
+            padding: 2px 5px;
+            border-radius: 4px;
+            outline: none;
+        }
     </style>
 </head>
 <body>
@@ -122,49 +134,39 @@ function renderTask(id, text) {
         <div class="delete-btn" onclick="deleteTask('${id}')">✕</div>
     `;
 
-    let startX = 0;
-    let currentX = 0;
+    const spanText = li.querySelector('.task-text');
 
-    li.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        li.style.transition = 'none'; 
-    }, {passive: true});
+    // --- LOGIQUE DE MODIFICATION (EDIT) ---
+    spanText.onclick = () => {
+        const currentText = spanText.textContent;
+        // On remplace le texte par un input
+        spanText.innerHTML = `<input type="text" class="edit-input" value="${currentText}">`;
+        const input = spanText.querySelector('.edit-input');
+        input.focus();
 
-    li.addEventListener('touchmove', (e) => {
-        currentX = e.touches[0].clientX;
-        const diff = currentX - startX;
-        
-        // On déplace l'élément selon la valeur de diff (positif ou négatif)
-        li.style.transform = `translateX(${diff}px)`;
-        
-        // L'opacité baisse peu importe le sens du glissement
-        const opacity = 1 - (Math.abs(diff) / 300);
-        li.style.opacity = opacity > 0 ? opacity : 0;
-    }, {passive: true});
+        // Fonction pour sauvegarder le changement
+        const saveEdit = () => {
+            const newText = input.value.trim();
+            if (newText !== "" && newText !== currentText) {
+                // On met à jour uniquement le texte dans Firebase
+                // On utilise update pour ne pas toucher à l'index 'order'
+                const { update } = firebase.database; // Note: utilise ta méthode importée
+                set(ref(db, `tasks/${id}/text`), newText);
+            } else {
+                spanText.textContent = currentText; // On remet l'ancien texte si vide
+            }
+        };
 
-    li.addEventListener('touchend', () => {
-        li.style.transition = 'all 0.3s ease';
-        const diff = currentX - startX;
+        // Sauvegarde sur 'Entrée' ou quand on clique ailleurs
+        input.onkeydown = (e) => { if (e.key === 'Enter') saveEdit(); };
+        input.onblur = saveEdit;
+    };
 
-        // Si on dépasse 100px à droite OU -100px à gauche
-        if (Math.abs(diff) > 100) { 
-            // On éjecte du côté où l'utilisateur a glissé
-            const direction = diff > 0 ? '150%' : '-150%';
-            li.style.transform = `translateX(${direction})`;
-            li.style.opacity = '0';
-            setTimeout(() => deleteTask(id), 300);
-        } else {
-            // Retour au centre
-            li.style.transform = 'translateX(0)';
-            li.style.opacity = '1';
-        }
-        startX = 0;
-        currentX = 0;
-    });
+    // --- REPRENDRE ICI TA LOGIQUE DE SWIPE (Garde le code existant) ---
+    // ... (Code startX, touchMoveX, etc.) ...
 
     taskList.appendChild(li);
 }
-
     function saveNewOrder() {
         const updates = {};
         document.querySelectorAll('#taskList li').forEach((li, index) => {
