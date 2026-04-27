@@ -97,15 +97,20 @@
     onEnd: function() { saveNewOrder(); }
   });
 
-  onValue(tasksRef, (snapshot) => {
+import { query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+
+const tasksQuery = query(tasksRef, orderByChild('order'));
+
+onValue(tasksQuery, (snapshot) => {
     if (document.querySelector('.sortable-chosen')) return;
+    
     taskList.innerHTML = "";
-    const data = snapshot.val();
-    if (data) {
-      const items = Object.keys(data).map(id => ({ id, ...data[id] }));
-      items.forEach(item => renderTask(item.id, item.text));
-    }
-  });
+    snapshot.forEach((childSnapshot) => {
+        const id = childSnapshot.key;
+        const data = childSnapshot.val();
+        renderTask(id, data.text);
+    });
+});
 
 function renderTask(id, text) {
     const li = document.createElement('li');
@@ -160,15 +165,19 @@ function renderTask(id, text) {
     taskList.appendChild(li);
 }
 
-  function saveNewOrder() {
-    const tasks = {};
-    document.querySelectorAll('#taskList li').forEach((li) => {
-        const id = li.dataset.id;
-        const text = li.querySelector('.task-text').textContent;
-        tasks[id] = { text: text };
-    });
-    set(tasksRef, tasks);
-  }
+    function saveNewOrder() {
+        const updates = {};
+        document.querySelectorAll('#taskList li').forEach((li, index) => {
+            const id = li.dataset.id;
+            const text = li.querySelector('.task-text').textContent;
+            // On stocke le texte ET la position
+            updates[id] = { 
+                text: text,
+                order: index 
+            };
+        });
+        set(tasksRef, updates);
+    }
 
   window.addTask = function() {
     const text = taskInput.value.trim();
