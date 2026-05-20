@@ -108,7 +108,7 @@
     const spanText = li.querySelector('.task-text');
 
     // MODIFICATION AU CLIC
-    spanText.onclick = (e) => {
+    spanText.ondblclick  = (e) => {
         e.stopPropagation();
         const currentText = spanText.textContent;
         const input = document.createElement('input');
