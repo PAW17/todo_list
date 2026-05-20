@@ -45,6 +45,11 @@
         }
 
         .edit-input { width: 100%; border: none; background: #f0eafc; font-family: inherit; font-size: inherit; color: #4a4a4a; padding: 2px 5px; border-radius: 4px; outline: none; }
+
+        button#filterBtn { width: 54px; height: 54px; cursor: pointer; background: white; color: #a100ff; border: 1.5px solid #a100ff; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        button#filterBtn.active { background: #a100ff; color: white; }
+        button#addBtn.filter-mode { background: white; color: #a100ff; border: 1.5px solid #a100ff; }
+        .empty-search { text-align: center; color: #c4a8f0; padding: 20px 0; font-size: 15px; display: none; }
     </style>
 </head>
 <body>
@@ -52,10 +57,12 @@
 <div class="container">
     <h2>TODO</h2>
     <div class="input-group">
-        <input type="text" id="taskInput" placeholder="Nouvelle tâche..." autocomplete="off">
+        <input type="text" id="taskInput" placeholder="Add task..." autocomplete="off">
         <button id="addBtn" onclick="addTask()">+</button>
+        <button id="filterBtn" onclick="toggleFilter()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
     </div>
     <ul id="taskList"></ul>
+    <p id="emptySearch" class="empty-search">Aucune tâche trouvée</p>
 </div>
 
 <script type="module">
@@ -78,6 +85,55 @@
   const tasksRef = ref(db, 'tasks');
   const taskList = document.getElementById('taskList');
   const taskInput = document.getElementById('taskInput');
+  let filterActive = false;
+
+  function setFilterMode(active) {
+    filterActive = active;
+    const filterBtn = document.getElementById('filterBtn');
+    const addBtn = document.getElementById('addBtn');
+    if (active) {
+      filterBtn.classList.add('active');
+      addBtn.classList.add('filter-mode');
+      taskInput.placeholder = 'Search...';
+    } else {
+      filterBtn.classList.remove('active');
+      addBtn.classList.remove('filter-mode');
+      taskInput.placeholder = 'Add task...';
+      taskList.querySelectorAll('li').forEach(li => li.style.display = '');
+      document.getElementById('emptySearch').style.display = 'none';
+    }
+  }
+
+  function applyFilter() {
+    const query = taskInput.value.toLowerCase();
+    let visibleCount = 0;
+    taskList.querySelectorAll('li').forEach(li => {
+      const text = li.querySelector('.task-text').textContent.toLowerCase();
+      const visible = text.includes(query);
+      li.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+    document.getElementById('emptySearch').style.display =
+      (visibleCount === 0 && query) ? 'block' : 'none';
+  }
+
+  window.toggleFilter = function() {
+    if (filterActive) {
+      setFilterMode(false);
+      taskInput.value = '';
+    } else {
+      setFilterMode(true);
+      applyFilter();
+    }
+    taskInput.focus();
+  };
+
+  taskInput.addEventListener('input', () => {
+    if (filterActive) {
+      if (taskInput.value === '') setFilterMode(false);
+      else applyFilter();
+    }
+  });
 
   Sortable.create(taskList, {
     animation: 150,
@@ -94,6 +150,7 @@
     snapshot.forEach((childSnapshot) => {
         renderTask(childSnapshot.key, childSnapshot.val().text);
     });
+    if (filterActive) applyFilter();
   });
 
   function renderTask(id, text) {
@@ -195,16 +252,11 @@ function saveNewOrder() {
 }
 
 window.addTask = function() {
+    if (filterActive) setFilterMode(false);
     const text = taskInput.value.trim();
     if (text !== "") {
-        // Date.now() donne un chiffre unique qui augmente sans cesse (ex: 1714382000000)
-        const timestampOrder = Date.now(); 
-
-        push(tasksRef, { 
-            text: text, 
-            order: timestampOrder 
-        });
-        
+        const timestampOrder = Date.now();
+        push(tasksRef, { text: text, order: timestampOrder });
         taskInput.value = "";
         taskInput.focus();
     }
