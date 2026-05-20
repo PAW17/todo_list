@@ -108,8 +108,9 @@
     const spanText = li.querySelector('.task-text');
 
     // MODIFICATION AU CLIC
-    spanText.ondblclick  = (e) => {
+    spanText.onclick  = (e) => {
         e.stopPropagation();
+        if (spanText.querySelector('.edit-input')) return; // déjà en édition, on ne fait rien
         const currentText = spanText.textContent;
         const input = document.createElement('input');
         input.type = 'text';
