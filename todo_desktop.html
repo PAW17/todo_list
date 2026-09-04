@@ -808,18 +808,31 @@ ${text}`;
 
   // ── News feed (The Guardian API — free, no credit card) ──
   const NEWS_TTL      = 60 * 60 * 1000; // 1h cache
-  const NEWS_COMPANIES = ['Accenture', 'Airbus', 'SAP'];
   // 'test' key works without registration (rate-limited); replace with free key from
   // https://bonobo.capi.gutools.co.uk/register/developer for higher limits
   const GUARDIAN_KEY  = localStorage.getItem('guardian-api-key') || 'test';
+
+  // Per-company search config: query + section to ensure relevance
+  const NEWS_COMPANIES = [
+    { label: 'Accenture', q: '"Accenture"',           section: 'business' },
+    { label: 'Airbus',    q: '"Airbus" aircraft OR aviation OR orders OR contract', section: 'business' },
+    { label: 'SAP',       q: '"SAP" software OR cloud OR enterprise OR ERP',        section: 'technology' }
+  ];
 
   function newsAge(ts) {
     const m = Math.floor((Date.now() - ts) / 60000);
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchGuardian(query) {
-    const url = `https://content.guardianapis.com/search?q=${encodeURIComponent(query)}&order-by=newest&page-size=6&api-key=${GUARDIAN_KEY}`;
+  async function fetchGuardian({ q, section }) {
+    const params = new URLSearchParams({
+      q,
+      section,
+      'order-by': 'newest',
+      'page-size': 6,
+      'api-key': GUARDIAN_KEY
+    });
+    const url = `https://content.guardianapis.com/search?${params}`;
     const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`Guardian HTTP ${res.status}`);
     const json = await res.json();
@@ -847,10 +860,10 @@ ${text}`;
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
         if (cached && (Date.now() - cached.ts) < NEWS_TTL) {
-          NEWS_COMPANIES.forEach(c => {
-            const el  = document.getElementById(`news-${c.toLowerCase()}`);
+          NEWS_COMPANIES.forEach(({ label }) => {
+            const el  = document.getElementById(`news-${label.toLowerCase()}`);
             const age = el?.closest('.news-tile')?.querySelector('.news-age');
-            if (el && cached.data[c]) el.innerHTML = renderNewsHtml(cached.data[c]);
+            if (el && cached.data[label]) el.innerHTML = renderNewsHtml(cached.data[label]);
             if (age) age.textContent = newsAge(cached.ts);
           });
           return;
@@ -858,8 +871,8 @@ ${text}`;
       } catch(_) {}
     }
 
-    NEWS_COMPANIES.forEach(c => {
-      document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
+    NEWS_COMPANIES.forEach(({ label }) => {
+      document.getElementById(`news-${label.toLowerCase()}`).innerHTML =
         '<div class="news-placeholder">Loading…</div>';
     });
     if (triggerBtn) triggerBtn.classList.add('spinning');
@@ -881,13 +894,14 @@ ${text}`;
     const data = {};
     let anySuccess = false;
 
-    for (const c of NEWS_COMPANIES) {
-      const el  = document.getElementById(`news-${c.toLowerCase()}`);
+    for (const cfg of NEWS_COMPANIES) {
+      const { label } = cfg;
+      const el  = document.getElementById(`news-${label.toLowerCase()}`);
       const age = el?.closest('.news-tile')?.querySelector('.news-age');
       try {
-        const items = await fetchWithRetry(c);
+        const items = await fetchWithRetry(cfg);
         if (items.length) {
-          data[c] = items;
+          data[label] = items;
           el.innerHTML = renderNewsHtml(items);
           if (age) age.textContent = 'just now';
           anySuccess = true;
@@ -897,7 +911,6 @@ ${text}`;
       } catch(e) {
         el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
       }
-      // Small pause between requests to respect rate limit
       await new Promise(r => setTimeout(r, 1500));
     }
 
