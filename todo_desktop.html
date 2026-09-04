@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TODO - Desktop</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: -apple-system, system-ui, sans-serif;
+            background: #f5f0ff;
+            color: #4a4a4a;
+            overflow: hidden;
+        }
+
+        /* ── LEFT SIDEBAR ── */
+        .sidebar {
+            width: 360px;
+            min-width: 360px;
+            height: 100vh;
+            background: white;
+            box-shadow: 4px 0 24px rgba(161, 0, 255, 0.07);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease, min-width 0.3s ease;
+            overflow: hidden;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+        }
+
+        /* ── SIDEBAR TOGGLE ── */
+        #sidebar-toggle {
+            position: absolute;
+            left: 0;
+            top: 24px;
+            width: 18px;
+            height: 48px;
+            background: white;
+            border: 1px solid #e8e0f8;
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            color: #c4a8f0;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 3px 0 10px rgba(161, 0, 255, 0.07);
+            z-index: 50;
+            transition: color 0.2s, background 0.2s;
+            user-select: none;
+        }
+
+        #sidebar-toggle:hover { color: #a100ff; background: #f5efff; }
+
+        .sidebar-header {
+            padding: 28px 24px 20px;
+            border-bottom: 1px solid #f0eafc;
+        }
+
+        h2 {
+            margin: 0 0 18px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #6a1b9a;
+            letter-spacing: -0.5px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group input {
+            flex-grow: 1;
+            min-width: 0;
+            padding: 10px 14px;
+            border: 1.5px solid #f0eafc;
+            border-radius: 12px;
+            font-size: 14px;
+            background: #fdfcff;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            border-color: #d1bdfc;
+        }
+
+        button#addBtn {
+            width: 42px;
+            height: 42px;
+            cursor: pointer;
+            background: #a100ff;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        button#addBtn:hover { opacity: 0.85; }
+
+        button#addBtn.filter-mode {
+            background: white;
+            color: #a100ff;
+            border: 1.5px solid #a100ff;
+        }
+
+        button#filterBtn {
+            width: 42px;
+            height: 42px;
+            cursor: pointer;
+            background: white;
+            color: #a100ff;
+            border: 1.5px solid #a100ff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        button#filterBtn:hover { background: #f5efff; }
+        button#filterBtn.active { background: #a100ff; color: white; }
+
+        /* ── TASK LIST ── */
+        .task-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .task-list-container::-webkit-scrollbar { width: 4px; }
+        .task-list-container::-webkit-scrollbar-track { background: transparent; }
+        .task-list-container::-webkit-scrollbar-thumb { background: #e0d0f8; border-radius: 4px; }
+
+        ul { list-style: none; padding: 0; margin: 0; }
+
+        li {
+            background: white;
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            border: 1px solid #f0eafc;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: #555;
+            transition: box-shadow 0.2s, border-color 0.2s;
+            cursor: default;
+        }
+
+        li:hover {
+            box-shadow: 0 4px 14px rgba(161, 0, 255, 0.07);
+            border-color: #d1bdfc;
+        }
+
+        .handle {
+            color: #d1bdfc;
+            margin-right: 10px;
+            font-size: 15px;
+            user-select: none;
+            cursor: grab;
+        }
+
+        .sortable-ghost  { opacity: 0.4; background: #f0eafc !important; }
+        .sortable-chosen { cursor: grabbing !important; box-shadow: 0 8px 20px rgba(161, 0, 255, 0.14); }
+
+        .task-text {
+            flex-grow: 1;
+            white-space: pre-wrap;
+            word-break: break-word;
+            cursor: pointer;
+            min-height: 20px;
+            line-height: 1.4;
+        }
+
+        .delete-btn {
+            cursor: pointer;
+            font-size: 12px;
+            color: #a100ff;
+            background: #f5efff;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-left: 8px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        li:hover .delete-btn { opacity: 1; }
+
+        .edit-input {
+            width: 100%;
+            border: none;
+            background: #f0eafc;
+            font-family: inherit;
+            font-size: inherit;
+            color: #4a4a4a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .empty-search {
+            text-align: center;
+            color: #c4a8f0;
+            padding: 20px 0;
+            font-size: 13px;
+            display: none;
+        }
+
+        .task-count {
+            text-align: center;
+            color: #ddd0f8;
+            font-size: 12px;
+            padding: 10px 0 4px;
+            user-select: none;
+        }
+
+        /* ── RIGHT AREA ── */
+        .workspace {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 324px 24px 24px;
+            gap: 12px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* ── CONFIG BAR ── */
+        .config-bar {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 9px 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            flex-shrink: 0;
+        }
+        .config-group { display: flex; align-items: center; gap: 8px; }
+        .config-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #bbb; white-space: nowrap; }
+        .config-select { background: #f8f5ff; border: 1px solid #e8e0f8; border-radius: 8px; padding: 5px 8px; font-size: 12px; color: #4a4a4a; font-family: inherit; outline: none; cursor: pointer; }
+        .config-key-wrap { display: flex; align-items: center; background: #f8f5ff; border: 1px solid #e8e0f8; border-radius: 8px; padding: 4px 10px; gap: 6px; flex: 1; min-width: 160px; }
+        .config-key-input { flex: 1; border: none; background: transparent; font-size: 12px; font-family: monospace; color: #4a4a4a; outline: none; min-width: 0; }
+        .config-key-input::placeholder { color: #ccc; }
+        .config-eye { cursor: pointer; color: #bbb; display: flex; align-items: center; }
+        .config-eye:hover { color: #a100ff; }
+        .config-saved { font-size: 10px; font-weight: 700; color: #22c55e; letter-spacing: 0.08em; white-space: nowrap; display: none; }
+
+        /* ── NOTES AREA ── */
+        .notes-wrapper {
+            height: 50vh;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        /* ── AI PANEL ── */
+        .ai-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            max-height: 25vh;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .ai-panel.visible { display: flex; }
+        .ai-panel-header { display: flex; align-items: center; gap: 8px; padding: 9px 16px 8px; border-bottom: 1px solid #f0eafc; flex-shrink: 0; }
+        .ai-panel-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #bbb; }
+        .ai-spinner { width: 12px; height: 12px; border: 2px solid #f0eafc; border-top-color: #a100ff; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+        .ai-spinner.active { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .ai-content { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 14px; line-height: 1.7; color: #4a4a4a; white-space: pre-wrap; }
+        .ai-content::-webkit-scrollbar { width: 4px; }
+        .ai-content::-webkit-scrollbar-thumb { background: #e0d0f8; border-radius: 4px; }
+
+        .notes-content {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            outline: none;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #4a4a4a;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .notes-content:empty::before {
+            content: "Notes";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ede8f8;
+            font-size: 72px;
+            font-weight: 700;
+            letter-spacing: -4px;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .notes-content::-webkit-scrollbar { width: 4px; }
+        .notes-content::-webkit-scrollbar-track { background: transparent; }
+        .notes-content::-webkit-scrollbar-thumb { background: #e0d0f8; border-radius: 4px; }
+
+        /* ── CALCULATOR ── */
+        :root {
+            --white: #ffffff;
+            --gray-100: #F5F5F5;
+            --gray-200: #E5E5E5;
+            --gray-400: #999999;
+            --gray-700: #2D2D2D;
+            --gray-900: #0F0F0F;
+            --acn-purple: #A100FF;
+            --danger: #D0021B;
+        }
+
+        .calc-wrapper {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 280px;
+            z-index: 10;
+        }
+
+        .calc-box {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .calc-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            overflow: hidden;
+        }
+
+        .calc-icon { color: var(--gray-400); flex-shrink: 0; display: flex; align-items: center; }
+
+        .calc-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-family: -apple-system, system-ui, sans-serif;
+            font-size: 14px;
+            color: var(--gray-900);
+            background: transparent;
+            min-width: 0;
+        }
+
+        .calc-input::placeholder { color: #ccc; }
+
+        .calc-clear {
+            color: var(--gray-400);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            flex-shrink: 0;
+            display: none;
+        }
+        .calc-clear:hover { color: var(--gray-700); }
+
+        .calc-result-box {
+            background: var(--gray-100);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-top: 6px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .calc-result-box:hover { background: var(--gray-200); }
+
+        .calc-result {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-radius: 12px;
+            background: var(--gray-100);
+        }
+        .calc-result:hover { background: var(--gray-200); }
+        .calc-result-icon { color: var(--acn-purple); flex-shrink: 0; }
+        .calc-result-content { flex: 1; min-width: 0; overflow: hidden; }
+        .calc-result-value { font-size: 16px; font-weight: 600; color: var(--gray-900); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .calc-result-copy { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+        .calc-result.error .calc-result-value { color: var(--danger); font-size: 12px; font-weight: 400; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h2>TODO</h2>
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="Add task..." autocomplete="off">
+            <button id="addBtn" onclick="addTask()">+</button>
+            <button id="filterBtn" onclick="toggleFilter()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="task-list-container">
+        <ul id="taskList"></ul>
+        <p id="emptySearch" class="empty-search">No task found</p>
+        <div id="taskCount" class="task-count"></div>
+    </div>
+</div>
+
+<div class="workspace">
+
+    <!-- SIDEBAR TOGGLE -->
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">‹</button>
+
+    <!-- CONFIG BAR -->
+    <div class="config-bar">
+        <div class="config-group">
+            <span class="config-label">Model</span>
+            <select id="model-select" class="config-select" onchange="saveModel()">
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Max free)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+            </select>
+        </div>
+        <div class="config-group" style="flex:1">
+            <span class="config-label">Gemini API Key</span>
+            <div class="config-key-wrap">
+                <input type="password" id="api-key-input" class="config-key-input" placeholder="AIzaSy..." oninput="saveApiKey()">
+                <span class="config-eye" onclick="toggleKeyVisibility()" title="Afficher / masquer">
+                    <svg id="eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </span>
+            </div>
+        </div>
+        <span class="config-saved" id="config-saved">SAVED ✓</span>
+    </div>
+
+    <!-- NOTES -->
+    <div class="notes-wrapper">
+        <div id="notes-content" class="notes-content" contenteditable="true"></div>
+    </div>
+
+    <!-- AI PANEL -->
+    <div class="ai-panel" id="ai-panel">
+        <div class="ai-panel-header">
+            <span class="ai-panel-title">AI Suggestion</span>
+            <div class="ai-spinner" id="ai-spinner"></div>
+        </div>
+        <div class="ai-content" id="ai-content"></div>
+    </div>
+
+    <!-- CALCULATOR (top-right) -->
+    <div class="calc-wrapper">
+        <div class="calc-box" id="calc-box">
+            <div class="calc-input-wrap">
+                <span class="calc-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="12" y1="9" x2="12" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><line x1="8" y1="13" x2="8" y2="13" stroke-width="3"/><line x1="12" y1="13" x2="12" y2="13" stroke-width="3"/><line x1="16" y1="13" x2="16" y2="13" stroke-width="3"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                </span>
+                <input type="text" id="calc-input" class="calc-input" placeholder="=(312+20)*5/100" oninput="calcEval()" onkeydown="calcKey(event)" autocomplete="off" spellcheck="false">
+                <span class="calc-clear" id="calc-clear" onclick="calcClear()">&#215;</span>
+            </div>
+        </div>
+        <div id="calc-result-wrapper" style="display:none;">
+            <div class="calc-result-box" onclick="calcCopy()">
+                <div class="calc-result" id="calc-result">
+                    <div class="calc-result-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="12" y1="9" x2="12" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><line x1="8" y1="13" x2="8" y2="13" stroke-width="3"/><line x1="12" y1="13" x2="12" y2="13" stroke-width="3"/><line x1="16" y1="13" x2="16" y2="13" stroke-width="3"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                    </div>
+                    <div class="calc-result-content">
+                        <div class="calc-result-value" id="calc-result-value">&#8212;</div>
+                        <div class="calc-result-copy" id="calc-copy-btn">Copy to clipboard</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+  function calcEval() {
+    const input   = document.getElementById('calc-input');
+    const result  = document.getElementById('calc-result');
+    const val     = document.getElementById('calc-result-value');
+    const clear   = document.getElementById('calc-clear');
+    const wrapper = document.getElementById('calc-result-wrapper');
+    const expr    = input.value.trim();
+
+    clear.style.display = expr ? 'block' : 'none';
+    if (!expr) { wrapper.style.display = 'none'; return; }
+
+    const clean = expr.startsWith('=') ? expr.slice(1) : expr;
+    try {
+      if (!/^[0-9+\-*/().,\s%]+$/.test(clean)) throw new Error('Invalid');
+      const num = Function('"use strict"; return (' + clean.replace(/,/g, '.') + ')')();
+      if (!isFinite(num)) throw new Error('Invalid');
+      const formatted = Number.isInteger(num)
+        ? num.toLocaleString('fr-FR')
+        : parseFloat(num.toFixed(6)).toLocaleString('fr-FR');
+      val.textContent = formatted;
+      result.className = 'calc-result';
+      wrapper.style.display = 'block';
+      document.getElementById('calc-copy-btn').textContent = 'Copy to clipboard';
+    } catch(e) {
+      val.textContent = 'Invalid expression';
+      result.className = 'calc-result error';
+      wrapper.style.display = 'block';
+    }
+  }
+
+  function calcKey(e)   { if (e.key === 'Escape') calcClear(); }
+
+  function calcClear() {
+    document.getElementById('calc-input').value = '';
+    document.getElementById('calc-result-wrapper').style.display = 'none';
+    document.getElementById('calc-clear').style.display = 'none';
+    document.getElementById('calc-input').focus();
+  }
+
+  // ── Sidebar toggle ───────────────────────────────────
+  function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const btn = document.getElementById('sidebar-toggle');
+    sidebar.classList.toggle('collapsed');
+    btn.textContent = sidebar.classList.contains('collapsed') ? '›' : '‹';
+  }
+
+  // ── API Key & Model ───────────────────────────────────
+  (function() {
+    const keyInput = document.getElementById('api-key-input');
+    const savedKey = localStorage.getItem('gemini-api-key');
+    if (savedKey) { keyInput.value = savedKey; document.getElementById('config-saved').style.display = 'block'; }
+    const savedModel = localStorage.getItem('gemini-model');
+    if (savedModel) { const s = document.getElementById('model-select'); if ([...s.options].some(o => o.value === savedModel)) s.value = savedModel; }
+  })();
+
+  function saveApiKey() {
+    const key = document.getElementById('api-key-input').value.trim();
+    const saved = document.getElementById('config-saved');
+    if (key) { localStorage.setItem('gemini-api-key', key); saved.style.display = 'block'; }
+    else      { localStorage.removeItem('gemini-api-key'); saved.style.display = 'none'; }
+  }
+
+  function saveModel() { localStorage.setItem('gemini-model', document.getElementById('model-select').value); }
+
+  function toggleKeyVisibility() {
+    const inp = document.getElementById('api-key-input');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  }
+
+  // ── Gemini AI ─────────────────────────────────────────
+  let aiTimer = null;
+
+  // Fallback order: reliable models tried when selected model is unavailable
+  const GEMINI_FALLBACKS = [
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ];
+
+  function scheduleAi(text) {
+    clearTimeout(aiTimer);
+    if (!localStorage.getItem('gemini-api-key') || !text.trim()) { hideAiPanel(); return; }
+    showAiLoading();
+    aiTimer = setTimeout(() => callGemini(text), 2000);
+  }
+
+  function showAiPanel()  { document.getElementById('ai-panel').classList.add('visible'); }
+  function hideAiPanel()  { document.getElementById('ai-panel').classList.remove('visible'); }
+  function showAiLoading() { showAiPanel(); document.getElementById('ai-spinner').classList.add('active'); document.getElementById('ai-content').textContent = ''; }
+  function showAiResult(t, model) {
+    document.getElementById('ai-spinner').classList.remove('active');
+    document.getElementById('ai-content').textContent = t;
+    // Update title to show which model was actually used
+    const title = document.querySelector('.ai-panel-title');
+    if (title) title.textContent = model ? `AI · ${model}` : 'AI Suggestion';
+  }
+  function showAiError(m)  { document.getElementById('ai-spinner').classList.remove('active'); document.getElementById('ai-content').textContent = '⚠ ' + m; }
+
+  function isNotFoundError(status, msg) {
+    return status === 404 ||
+      (msg && (msg.toLowerCase().includes('not found') ||
+               msg.toLowerCase().includes('not supported') ||
+               msg.toLowerCase().includes('not available')));
+  }
+
+  async function callGemini(text) {
+    const key = localStorage.getItem('gemini-api-key');
+    const selectedModel = document.getElementById('model-select').value;
+
+    // Build the list to try: selected first, then fallbacks (skipping selected if already there)
+    const modelsToTry = [selectedModel, ...GEMINI_FALLBACKS.filter(m => m !== selectedModel)];
+
+    const prompt = `You are a writing assistant. Correct spelling and grammar, improve clarity and flow. Keep the same language as the input (French or English). Preserve meaning and structure. Return ONLY the improved text, no explanations.\n\n${text}`;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3 }
+    });
+
+    let lastError = '';
+
+    for (const model of modelsToTry) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+
+        if (!res.ok) {
+          const e = await res.json();
+          const msg = e.error?.message || `HTTP ${res.status}`;
+          lastError = msg;
+          if (isNotFoundError(res.status, msg)) continue; // try next model
+          break; // auth / quota error — no point retrying
+        }
+
+        const data = await res.json();
+        const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!result) { lastError = 'Empty response'; break; }
+
+        showAiResult(result, model !== selectedModel ? model : null);
+        return;
+
+      } catch(e) {
+        lastError = e.message;
+        break; // network error — no point retrying
+      }
+    }
+
+    showAiError(lastError || 'All models unavailable');
+  }
+
+  // ── Notes persistence ────────────────────────────────
+  (function() {
+    const el = document.getElementById('notes-content');
+    const saved = localStorage.getItem('desktop-notes');
+    if (saved) el.innerHTML = saved;
+    el.addEventListener('input', () => {
+      localStorage.setItem('desktop-notes', el.innerHTML);
+      scheduleAi(el.innerText);
+    });
+  })();
+
+  function calcCopy() {
+    const val = document.getElementById('calc-result-value').textContent;
+    if (val === 'Invalid expression') return;
+    navigator.clipboard.writeText(val.replace(/\s/g, '').replace(',', '.')).then(() => {
+      document.getElementById('calc-copy-btn').textContent = '✓ Copied!';
+      setTimeout(() => {
+        document.getElementById('calc-copy-btn').textContent = 'Copy to clipboard';
+      }, 1500);
+    });
+  }
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, push, onValue, remove, set, update, query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
+    authDomain: "todolist-93c54.firebaseapp.com",
+    databaseURL: "https://todolist-93c54-default-rtdb.firebaseio.com",
+    projectId: "todolist-93c54",
+    storageBucket: "todolist-93c54.firebasestorage.app",
+    messagingSenderId: "944974392488",
+    appId: "1:944974392488:web:0dc9a1fb2fb8733f31e69d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+  const tasksRef  = ref(db, 'tasks');
+  const taskList  = document.getElementById('taskList');
+  const taskInput = document.getElementById('taskInput');
+  let filterActive = false;
+
+  // ── Filter mode ──────────────────────────────────────
+  function setFilterMode(active) {
+    filterActive = active;
+    const filterBtn = document.getElementById('filterBtn');
+    const addBtn    = document.getElementById('addBtn');
+    if (active) {
+      filterBtn.classList.add('active');
+      addBtn.classList.add('filter-mode');
+      taskInput.placeholder = 'Search...';
+    } else {
+      filterBtn.classList.remove('active');
+      addBtn.classList.remove('filter-mode');
+      taskInput.placeholder = 'Add task...';
+      taskList.querySelectorAll('li').forEach(li => li.style.display = '');
+      document.getElementById('emptySearch').style.display = 'none';
+    }
+    updateCount();
+  }
+
+  function applyFilter() {
+    const q = taskInput.value.toLowerCase();
+    let visible = 0;
+    taskList.querySelectorAll('li').forEach(li => {
+      const match = li.querySelector('.task-text').textContent.toLowerCase().includes(q);
+      li.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    document.getElementById('emptySearch').style.display = (visible === 0 && q) ? 'block' : 'none';
+    updateCount();
+  }
+
+  function updateCount() {
+    const total   = taskList.querySelectorAll('li').length;
+    const visible = [...taskList.querySelectorAll('li')].filter(li => li.style.display !== 'none').length;
+    const el = document.getElementById('taskCount');
+    if (total === 0) { el.textContent = ''; return; }
+    el.textContent = filterActive ? `${visible} / ${total} tasks` : `${total} task${total > 1 ? 's' : ''}`;
+  }
+
+  window.toggleFilter = function() {
+    if (filterActive) {
+      setFilterMode(false);
+      taskInput.value = '';
+    } else {
+      setFilterMode(true);
+      applyFilter();
+    }
+    taskInput.focus();
+  };
+
+  taskInput.addEventListener('input', () => {
+    if (filterActive) {
+      taskInput.value === '' ? setFilterMode(false) : applyFilter();
+    }
+  });
+
+  // ── Drag & drop ──────────────────────────────────────
+  Sortable.create(taskList, {
+    animation: 150,
+    handle: '.handle',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: saveNewOrder
+  });
+
+  function saveNewOrder() {
+    const updates = {};
+    taskList.querySelectorAll('li').forEach((li, i) => {
+      updates[`${li.dataset.id}/order`] = i;
+    });
+    update(tasksRef, updates);
+  }
+
+  // ── Firebase listener ─────────────────────────────────
+  const tasksQuery = query(tasksRef, orderByChild('order'));
+
+  onValue(tasksQuery, (snapshot) => {
+    if (document.querySelector('.sortable-chosen')) return;
+    taskList.innerHTML = '';
+    snapshot.forEach(child => renderTask(child.key, child.val().text));
+    if (filterActive) applyFilter();
+    else updateCount();
+  }, (err) => console.error('Firebase error:', err));
+
+  // ── Render a task ─────────────────────────────────────
+  function renderTask(id, text) {
+    const li = document.createElement('li');
+    li.dataset.id = id;
+    li.innerHTML = `
+      <div class="handle">⋮⋮</div>
+      <span class="task-text">${text}</span>
+      <div class="delete-btn" onclick="deleteTask('${id}')">✕</div>
+    `;
+
+    // Inline edit on click
+    const span = li.querySelector('.task-text');
+    span.onclick = (e) => {
+      e.stopPropagation();
+      if (span.querySelector('.edit-input')) return;
+      const current = span.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'edit-input';
+      input.value = current;
+      span.innerHTML = '';
+      span.appendChild(input);
+      input.focus();
+
+      const save = () => {
+        const newText = input.value.trim();
+        if (newText && newText !== current) {
+          set(ref(db, `tasks/${id}/text`), newText);
+        } else {
+          span.textContent = current;
+        }
+      };
+      input.onkeydown = (ev) => { if (ev.key === 'Enter') save(); };
+      input.onblur = save;
+    };
+
+    taskList.appendChild(li);
+  }
+
+  // ── Add / Delete ──────────────────────────────────────
+  window.addTask = function() {
+    if (filterActive) setFilterMode(false);
+    const text = taskInput.value.trim();
+    if (text) {
+      push(tasksRef, { text, order: Date.now() });
+      taskInput.value = '';
+      taskInput.focus();
+    }
+  };
+
+  window.deleteTask = function(id) {
+    remove(ref(db, `tasks/${id}`));
+  };
+
+  taskInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addTask();
+  });
+</script>
+</body>
+</html>
