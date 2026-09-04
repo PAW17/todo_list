@@ -538,12 +538,6 @@
                 </span>
             </div>
         </div>
-        <div class="config-group" style="flex:1">
-            <span class="config-label">AV Key</span>
-            <div class="config-key-wrap">
-                <input type="password" id="av-key-input" class="config-key-input" placeholder="Alpha Vantage..." oninput="saveAvKey()">
-            </div>
-        </div>
         <span class="config-saved" id="config-saved">SAVED ✓</span>
     </div>
 
@@ -820,14 +814,14 @@ ${text}`;
     });
   })();
 
-  // ── News feed (Alpha Vantage — financial news by ticker) ──
+  // ── News feed (Google News via rss2json — free, no key needed) ──
   const NEWS_TTL = 60 * 60 * 1000; // 1h cache
 
-  // Ticker mapping: ACN=Accenture, EADSY=Airbus ADR, SAP=SAP
+  // Google News queries per company — mots-clés précis pour éviter les faux positifs
   const NEWS_COMPANIES = [
-    { label: 'Accenture', ticker: 'ACN'   },
-    { label: 'Airbus',    ticker: 'EADSY' },
-    { label: 'SAP',       ticker: 'SAP'   }
+    { label: 'Accenture', q: '"Accenture" consulting OR revenue OR contract OR strategy OR AI' },
+    { label: 'Airbus',    q: '"Airbus" aircraft OR orders OR deliveries OR A320 OR A350 OR defense' },
+    { label: 'SAP',       q: '"SAP" software OR cloud OR ERP OR RISE OR S4HANA OR enterprise' }
   ];
 
   function newsAge(ts) {
@@ -835,32 +829,19 @@ ${text}`;
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchAlphaVantage({ ticker }) {
-    const key = localStorage.getItem('alphavantage-api-key');
-    if (!key) throw new Error('AV key required — enter it in the config bar');
-    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${ticker}&apikey=${key}&limit=50&sort=RELEVANCE`;
-    const res  = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw new Error(`AV HTTP ${res.status}`);
+  async function fetchGoogleNews({ q }) {
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en&gl=US&ceid=US:en`;
+    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=8`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`rss2json HTTP ${res.status}`);
     const json = await res.json();
-    if (json.Note)        throw new Error('Rate limit — wait 1 min (free: 25 req/day)');
-    if (json.Information) throw new Error(json.Information);
-    return (json.feed || [])
-      .filter(a => {
-        const ts = (a.ticker_sentiment || []).find(t => t.ticker === ticker);
-        return ts && parseFloat(ts.relevance_score || 0) > 0.6;
-      })
-      .sort((a, b) => {
-        const sa = (a.ticker_sentiment || []).find(t => t.ticker === ticker);
-        const sb = (b.ticker_sentiment || []).find(t => t.ticker === ticker);
-        return parseFloat(sb?.relevance_score || 0) - parseFloat(sa?.relevance_score || 0);
-      })
-      .slice(0, 6)
-      .map(a => ({
-        title  : a.title,
-        url    : a.url,
-        source : a.source,
-        date   : (a.time_published || '').slice(0, 8).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')
-      }));
+    if (json.status !== 'ok') throw new Error(json.message || 'rss2json error');
+    return (json.items || []).slice(0, 6).map(a => ({
+      title  : a.title,
+      url    : a.link,
+      source : a.author || '',
+      date   : a.pubDate ? a.pubDate.slice(0, 10) : ''
+    }));
   }
 
   function renderNewsHtml(items) {
@@ -873,7 +854,7 @@ ${text}`;
   }
 
   async function loadAllNews(force = false, triggerBtn = null) {
-    const cacheKey = 'news-cache-av';
+    const cacheKey = 'news-cache-gnews';
 
     // Serve from cache if fresh
     if (!force) {
@@ -900,7 +881,7 @@ ${text}`;
     async function fetchWithRetry(query) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const items = await fetchAlphaVantage(query);
+          const items = await fetchGoogleNews(query);
           if (items.length) return items;
         } catch(e) {
           if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
