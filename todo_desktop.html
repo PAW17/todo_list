@@ -562,21 +562,24 @@
         <div class="news-tile">
             <div class="news-tile-header">
                 <span class="news-tile-label">Accenture</span>
-                <span class="news-refresh" onclick="refreshNews('Accenture','news-accenture',this)" title="Refresh">↻</span>
+                <span class="news-age" style="font-size:9px;color:#ddd;margin-left:4px;"></span>
+                <span class="news-refresh" onclick="refreshNews('Accenture','news-accenture',this,true)" title="Refresh">↻</span>
             </div>
             <div class="news-items" id="news-accenture"><div class="news-placeholder">Loading…</div></div>
         </div>
         <div class="news-tile">
             <div class="news-tile-header">
                 <span class="news-tile-label">Airbus</span>
-                <span class="news-refresh" onclick="refreshNews('Airbus','news-airbus',this)" title="Refresh">↻</span>
+                <span class="news-age" style="font-size:9px;color:#ddd;margin-left:4px;"></span>
+                <span class="news-refresh" onclick="refreshNews('Airbus','news-airbus',this,true)" title="Refresh">↻</span>
             </div>
             <div class="news-items" id="news-airbus"><div class="news-placeholder">Loading…</div></div>
         </div>
         <div class="news-tile">
             <div class="news-tile-header">
                 <span class="news-tile-label">SAP</span>
-                <span class="news-refresh" onclick="refreshNews('SAP','news-sap',this)" title="Refresh">↻</span>
+                <span class="news-age" style="font-size:9px;color:#ddd;margin-left:4px;"></span>
+                <span class="news-refresh" onclick="refreshNews('SAP','news-sap',this,true)" title="Refresh">↻</span>
             </div>
             <div class="news-items" id="news-sap"><div class="news-placeholder">Loading…</div></div>
         </div>
@@ -804,8 +807,31 @@ ${text}`;
   })();
 
   // ── News feed (via Gemini Google Search grounding) ───
-  async function refreshNews(company, elementId, btn) {
+  const NEWS_TTL = 60 * 60 * 1000; // 1 hour cache
+
+  function newsAge(ts) {
+    const m = Math.floor((Date.now() - ts) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
+  }
+
+  async function refreshNews(company, elementId, btn, force = false) {
     const container = document.getElementById(elementId);
+    const cacheKey  = `news-cache-${company.toLowerCase()}`;
+
+    // Use cache if fresh and not a manual refresh
+    if (!force) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (cached && (Date.now() - cached.ts) < NEWS_TTL) {
+          container.innerHTML = cached.html;
+          // Update age label in header
+          const label = container.closest('.news-tile')?.querySelector('.news-age');
+          if (label) label.textContent = newsAge(cached.ts);
+          return;
+        }
+      } catch(_) {}
+    }
+
     container.innerHTML = '<div class="news-placeholder">Loading…</div>';
     if (btn) btn.classList.add('spinning');
 
@@ -823,8 +849,7 @@ ${text}`;
       tools: [{ google_search: {} }]
     });
 
-    let lastError = '';
-    let done = false;
+    let lastError = '', done = false;
 
     for (const model of GEMINI_FALLBACKS) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
@@ -839,9 +864,10 @@ ${text}`;
         }
         const data = await res.json();
         const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        let html = '';
 
         if (chunks.length > 0) {
-          container.innerHTML = chunks.slice(0, 6).map(c => {
+          html = chunks.slice(0, 6).map(c => {
             const title = c.web?.title || '(no title)';
             const uri   = c.web?.uri   || '#';
             let src = '';
@@ -853,24 +879,28 @@ ${text}`;
           }).join('');
         } else {
           const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No results';
-          container.innerHTML = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
+          html = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
         }
+
+        container.innerHTML = html;
+        // Save to cache
+        localStorage.setItem(cacheKey, JSON.stringify({ html, ts: Date.now() }));
+        // Update age label
+        const label = container.closest('.news-tile')?.querySelector('.news-age');
+        if (label) label.textContent = 'just now';
         done = true;
         break;
       } catch(e) { lastError = e.message; break; }
     }
 
-    if (!done) {
-      container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
-    }
-
+    if (!done) container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
     if (btn) btn.classList.remove('spinning');
   }
 
-  // Load on startup (slight stagger to avoid hammering the API)
-  setTimeout(() => refreshNews('Accenture', 'news-accenture'), 0);
-  setTimeout(() => refreshNews('Airbus',    'news-airbus'),    400);
-  setTimeout(() => refreshNews('SAP',       'news-sap'),       800);
+  // Load on startup — staggered by 4s to respect rate limits; each uses cache if fresh
+  setTimeout(() => refreshNews('Accenture', 'news-accenture'), 500);
+  setTimeout(() => refreshNews('Airbus',    'news-airbus'),    4500);
+  setTimeout(() => refreshNews('SAP',       'news-sap'),       8500);
 
   function calcCopy() {
     const val = document.getElementById('calc-result-value').textContent;
