@@ -682,10 +682,16 @@
 
   // ── Gemini AI ─────────────────────────────────────────
 
-  // Fallback order: reliable models tried when selected model is unavailable
+  // All known models, newest first — used for fallback in both AI and news
   const GEMINI_FALLBACKS = [
-    'gemini-2.0-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
     'gemini-1.5-flash',
     'gemini-1.5-pro'
   ];
@@ -810,46 +816,52 @@ ${text}`;
       return;
     }
 
-    // gemini-2.0-flash supports google_search grounding
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text:
+        `List the 6 most recent news headlines about ${company} from the last 48 hours. For each: title and date only.`
+      }] }],
+      tools: [{ google_search: {} }]
+    });
 
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text:
-            `List the 6 most recent news headlines about ${company} from the last 48 hours. For each: title and date only.`
-          }] }],
-          tools: [{ google_search: {} }]
-        })
-      });
+    let lastError = '';
+    let done = false;
 
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-      const data = await res.json();
+    for (const model of GEMINI_FALLBACKS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        if (!res.ok) {
+          const e = await res.json();
+          const msg = e.error?.message || `HTTP ${res.status}`;
+          lastError = msg;
+          if (isNotFoundError(res.status, msg)) continue;
+          break;
+        }
+        const data = await res.json();
+        const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
-      // Grounding chunks = real source links from Google Search
-      const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        if (chunks.length > 0) {
+          container.innerHTML = chunks.slice(0, 6).map(c => {
+            const title = c.web?.title || '(no title)';
+            const uri   = c.web?.uri   || '#';
+            let src = '';
+            try { src = new URL(uri).hostname.replace(/^www\./, ''); } catch(_) {}
+            return `<div class="news-entry">
+              <a href="${uri}" target="_blank" rel="noopener">${title}</a>
+              <div class="news-entry-meta">${src}</div>
+            </div>`;
+          }).join('');
+        } else {
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No results';
+          container.innerHTML = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
+        }
+        done = true;
+        break;
+      } catch(e) { lastError = e.message; break; }
+    }
 
-      if (chunks.length > 0) {
-        container.innerHTML = chunks.slice(0, 6).map(c => {
-          const title = c.web?.title || '(no title)';
-          const uri   = c.web?.uri   || '#';
-          // Extract short domain as source label
-          let src = '';
-          try { src = new URL(uri).hostname.replace(/^www\./, ''); } catch(_) {}
-          return `<div class="news-entry">
-            <a href="${uri}" target="_blank" rel="noopener">${title}</a>
-            <div class="news-entry-meta">${src}</div>
-          </div>`;
-        }).join('');
-      } else {
-        // Fallback: render the text answer if no chunks
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No results';
-        container.innerHTML = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
-      }
-    } catch(e) {
-      container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
+    if (!done) {
+      container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
     }
 
     if (btn) btn.classList.remove('spinning');
