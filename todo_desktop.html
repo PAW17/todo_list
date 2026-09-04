@@ -806,36 +806,51 @@ ${text}`;
     });
   })();
 
-  // ── News feed (single Gemini call, no grounding) ────
-  const NEWS_TTL = 60 * 60 * 1000; // 1h cache
+  // ── News feed (The Guardian API — free, no credit card) ──
+  const NEWS_TTL      = 60 * 60 * 1000; // 1h cache
   const NEWS_COMPANIES = ['Accenture', 'Airbus', 'SAP'];
+  // 'test' key works without registration (rate-limited); replace with free key from
+  // https://bonobo.capi.gutools.co.uk/register/developer for higher limits
+  const GUARDIAN_KEY  = localStorage.getItem('guardian-api-key') || 'test';
 
   function newsAge(ts) {
     const m = Math.floor((Date.now() - ts) / 60000);
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
+  async function fetchGuardian(query) {
+    const url = `https://content.guardianapis.com/search?q=${encodeURIComponent(query)}&order-by=newest&page-size=6&api-key=${GUARDIAN_KEY}`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`Guardian HTTP ${res.status}`);
+    const json = await res.json();
+    return (json.response?.results || []).map(a => ({
+      title : a.webTitle,
+      url   : a.webUrl,
+      date  : a.webPublicationDate?.slice(0, 10) || ''
+    }));
+  }
+
   function renderNewsHtml(items) {
-    return items.map(({ title, source }) =>
+    return items.map(({ title, url, date }) =>
       `<div class="news-entry">
-        <a href="#" onclick="return false" style="cursor:default">${title}</a>
-        <div class="news-entry-meta">${source || ''}</div>
+        <a href="${url}" target="_blank" rel="noopener">${title}</a>
+        <div class="news-entry-meta">The Guardian · ${date}</div>
       </div>`
     ).join('');
   }
 
   async function loadAllNews(force = false, triggerBtn = null) {
-    const cacheKey = 'news-cache-all';
+    const cacheKey = 'news-cache-guardian';
 
-    // Use cache if fresh
+    // Serve from cache if fresh
     if (!force) {
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
         if (cached && (Date.now() - cached.ts) < NEWS_TTL) {
           NEWS_COMPANIES.forEach(c => {
-            const el = document.getElementById(`news-${c.toLowerCase()}`);
-            if (el && cached.data[c]) el.innerHTML = renderNewsHtml(cached.data[c]);
+            const el  = document.getElementById(`news-${c.toLowerCase()}`);
             const age = el?.closest('.news-tile')?.querySelector('.news-age');
+            if (el && cached.data[c]) el.innerHTML = renderNewsHtml(cached.data[c]);
             if (age) age.textContent = newsAge(cached.ts);
           });
           return;
@@ -843,77 +858,41 @@ ${text}`;
       } catch(_) {}
     }
 
-    // Show loading
     NEWS_COMPANIES.forEach(c => {
       document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
         '<div class="news-placeholder">Loading…</div>';
     });
     if (triggerBtn) triggerBtn.classList.add('spinning');
 
-    const key = localStorage.getItem('gemini-api-key');
-    if (!key) {
-      NEWS_COMPANIES.forEach(c => {
-        document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
-          '<div class="news-placeholder">API key required</div>';
-      });
-      if (triggerBtn) triggerBtn.classList.remove('spinning');
-      return;
-    }
+    // Fetch all 3 companies in parallel
+    const results = await Promise.allSettled(
+      NEWS_COMPANIES.map(c => fetchGuardian(c))
+    );
 
-    const prompt = `Give me the 5 most important recent news headlines for each of these companies: Accenture, Airbus, SAP.
-Return ONLY a JSON object, no markdown, no explanation:
-{"Accenture":[{"title":"...","source":"..."}],"Airbus":[{"title":"...","source":"..."}],"SAP":[{"title":"...","source":"..."}]}`;
+    const data = {};
+    let anySuccess = false;
+    NEWS_COMPANIES.forEach((c, i) => {
+      const el  = document.getElementById(`news-${c.toLowerCase()}`);
+      const age = el?.closest('.news-tile')?.querySelector('.news-age');
+      if (results[i].status === 'fulfilled' && results[i].value.length) {
+        data[c] = results[i].value;
+        el.innerHTML = renderNewsHtml(data[c]);
+        if (age) age.textContent = 'just now';
+        anySuccess = true;
+      } else {
+        const msg = results[i].reason?.message || 'Unavailable';
+        el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${msg}</div>`;
+      }
+    });
 
-    let lastError = '', done = false;
-
-    for (const model of GEMINI_FALLBACKS) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
-        });
-        if (!res.ok) {
-          const e = await res.json();
-          const msg = e.error?.message || `HTTP ${res.status}`;
-          lastError = msg;
-          if (isNotFoundError(res.status, msg)) continue;
-          break;
-        }
-        const data = await res.json();
-        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        // Strip possible markdown code fences
-        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(text);
-
-        const ts = Date.now();
-        localStorage.setItem(cacheKey, JSON.stringify({ data: parsed, ts }));
-
-        NEWS_COMPANIES.forEach(c => {
-          const el = document.getElementById(`news-${c.toLowerCase()}`);
-          if (el && parsed[c]) el.innerHTML = renderNewsHtml(parsed[c]);
-          const age = el?.closest('.news-tile')?.querySelector('.news-age');
-          if (age) age.textContent = 'just now';
-        });
-        done = true;
-        break;
-      } catch(e) { lastError = e.message; break; }
-    }
-
-    if (!done) {
-      NEWS_COMPANIES.forEach(c => {
-        document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
-          `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
-      });
+    if (anySuccess) {
+      localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
     }
     if (triggerBtn) triggerBtn.classList.remove('spinning');
   }
 
-  // Expose for refresh buttons
-  window.refreshNews = (company, elementId, btn, force) => loadAllNews(force, btn);
+  window.refreshNews = (_company, _id, btn, force) => loadAllNews(force, btn);
 
-  // Load on startup
   setTimeout(() => loadAllNews(), 800);
 
   function calcCopy() {
