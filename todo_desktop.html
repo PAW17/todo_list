@@ -797,46 +797,68 @@ ${text}`;
     });
   })();
 
-  // ── News feed ─────────────────────────────────────────
-  async function refreshNews(query, elementId, btn) {
+  // ── News feed (via Gemini Google Search grounding) ───
+  async function refreshNews(company, elementId, btn) {
     const container = document.getElementById(elementId);
     container.innerHTML = '<div class="news-placeholder">Loading…</div>';
-    if (btn) { btn.classList.add('spinning'); }
+    if (btn) btn.classList.add('spinning');
 
-    const rssUrl  = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en&gl=US&ceid=US:en`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+    const key = localStorage.getItem('gemini-api-key');
+    if (!key) {
+      container.innerHTML = '<div class="news-placeholder">API key required</div>';
+      if (btn) btn.classList.remove('spinning');
+      return;
+    }
+
+    // gemini-2.0-flash supports google_search grounding
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
     try {
-      const res  = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-      const json = await res.json();
-      const xml  = new DOMParser().parseFromString(json.contents, 'text/xml');
-      const items = [...xml.querySelectorAll('item')].slice(0, 6);
-      if (!items.length) throw new Error('empty');
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text:
+            `List the 6 most recent news headlines about ${company} from the last 48 hours. For each: title and date only.`
+          }] }],
+          tools: [{ google_search: {} }]
+        })
+      });
 
-      container.innerHTML = items.map(item => {
-        const title  = item.querySelector('title')?.textContent || '';
-        const link   = item.querySelector('guid')?.textContent ||
-                       item.querySelector('link')?.textContent || '#';
-        const source = item.querySelector('source')?.textContent || '';
-        const pub    = item.querySelector('pubDate')?.textContent || '';
-        let when = '';
-        if (pub) {
-          const diff = Math.floor((Date.now() - new Date(pub)) / 3600000);
-          when = diff < 1 ? 'just now' : diff < 24 ? `${diff}h` : `${Math.floor(diff/24)}d`;
-        }
-        return `<div class="news-entry">
-          <a href="${link}" target="_blank" rel="noopener">${title}</a>
-          <div class="news-entry-meta">${[source, when].filter(Boolean).join(' · ')}</div>
-        </div>`;
-      }).join('');
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+      const data = await res.json();
+
+      // Grounding chunks = real source links from Google Search
+      const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+      if (chunks.length > 0) {
+        container.innerHTML = chunks.slice(0, 6).map(c => {
+          const title = c.web?.title || '(no title)';
+          const uri   = c.web?.uri   || '#';
+          // Extract short domain as source label
+          let src = '';
+          try { src = new URL(uri).hostname.replace(/^www\./, ''); } catch(_) {}
+          return `<div class="news-entry">
+            <a href="${uri}" target="_blank" rel="noopener">${title}</a>
+            <div class="news-entry-meta">${src}</div>
+          </div>`;
+        }).join('');
+      } else {
+        // Fallback: render the text answer if no chunks
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No results';
+        container.innerHTML = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
+      }
     } catch(e) {
-      container.innerHTML = '<div class="news-placeholder" style="color:#e0c8f8">Unavailable</div>';
+      container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
     }
-    if (btn) { btn.classList.remove('spinning'); }
+
+    if (btn) btn.classList.remove('spinning');
   }
 
-  // Load on startup
-  ['Accenture','Airbus','SAP'].forEach(q => refreshNews(q, `news-${q.toLowerCase()}`));
+  // Load on startup (slight stagger to avoid hammering the API)
+  setTimeout(() => refreshNews('Accenture', 'news-accenture'), 0);
+  setTimeout(() => refreshNews('Airbus',    'news-airbus'),    400);
+  setTimeout(() => refreshNews('SAP',       'news-sap'),       800);
 
   function calcCopy() {
     const val = document.getElementById('calc-result-value').textContent;
