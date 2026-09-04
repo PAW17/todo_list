@@ -838,7 +838,7 @@ ${text}`;
   async function fetchAlphaVantage({ ticker }) {
     const key = localStorage.getItem('alphavantage-api-key');
     if (!key) throw new Error('AV key required — enter it in the config bar');
-    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${ticker}&apikey=${key}&limit=10&sort=LATEST`;
+    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${ticker}&apikey=${key}&limit=50&sort=RELEVANCE`;
     const res  = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`AV HTTP ${res.status}`);
     const json = await res.json();
@@ -847,7 +847,12 @@ ${text}`;
     return (json.feed || [])
       .filter(a => {
         const ts = (a.ticker_sentiment || []).find(t => t.ticker === ticker);
-        return !ts || parseFloat(ts.relevance_score || 0) > 0.25;
+        return ts && parseFloat(ts.relevance_score || 0) > 0.6;
+      })
+      .sort((a, b) => {
+        const sa = (a.ticker_sentiment || []).find(t => t.ticker === ticker);
+        const sb = (b.ticker_sentiment || []).find(t => t.ticker === ticker);
+        return parseFloat(sb?.relevance_score || 0) - parseFloat(sa?.relevance_score || 0);
       })
       .slice(0, 6)
       .map(a => ({
