@@ -628,7 +628,30 @@
     // Build the list to try: selected first, then fallbacks (skipping selected if already there)
     const modelsToTry = [selectedModel, ...GEMINI_FALLBACKS.filter(m => m !== selectedModel)];
 
-    const prompt = `You are a writing assistant. Correct spelling and grammar, improve clarity and flow. Keep the same language as the input (French or English). Preserve meaning and structure. Return ONLY the improved text, no explanations.\n\n${text}`;
+    const prompt = `Correct, rephrase and improve the text below.
+Context:
+
+* The input may consist of rough notes, shorthand, abbreviations or incomplete sentences.
+* The output should be directly usable in a professional consulting environment.
+* Use the tone and style of a Senior Manager at Accenture: clear, structured, credible, professional and action-oriented.
+
+Style guidelines:
+
+* Be straight to the point.
+* Keep it clear, concise and effective.
+* Avoid unnecessary wording, fluff, excessive corporate jargon or overly polished/AI-sounding language.
+* Preserve the original meaning and do not invent any information.
+* Rephrase only when it improves clarity, impact or professionalism.
+* Keep useful abbreviations and roughly the same level of detail as the original text.
+* If the original wording is already good, do not over-rewrite it.
+* Use the same language as the input text.
+* If the text mixes French and English, keep that mix when it feels natural in a professional environment.
+* Prefer short, direct and natural sentences.
+* The result should sound like it was written by an experienced senior consultant, not by an AI.
+
+Return only the corrected and improved version, with no explanation or comments.
+Text:
+${text}`;
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3 }
