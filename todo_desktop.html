@@ -538,12 +538,6 @@
                 </span>
             </div>
         </div>
-        <div class="config-group" style="flex:1">
-            <span class="config-label">News Key</span>
-            <div class="config-key-wrap">
-                <input type="password" id="newsdata-key-input" class="config-key-input" placeholder="newsdata.io/register…" oninput="saveNewsdataKey()">
-            </div>
-        </div>
         <span class="config-saved" id="config-saved">SAVED ✓</span>
     </div>
 
@@ -820,14 +814,13 @@ ${text}`;
     });
   })();
 
-  // ── News feed (newsdata.io — real news API, CORS native, free 200 req/day) ──
-  // Clé gratuite sans carte : https://newsdata.io/register
+  // ── News feed (Gemini url_context → Google News RSS) ──
   const NEWS_TTL = 60 * 60 * 1000; // 1h cache
 
   const NEWS_COMPANIES = [
-    { label: 'Accenture', q: 'Accenture consulting OR revenue OR contract OR strategy' },
-    { label: 'Airbus',    q: 'Airbus aircraft OR orders OR A320 OR A350 OR defense' },
-    { label: 'SAP',       q: 'SAP software OR cloud OR ERP OR RISE OR enterprise' }
+    { label: 'Accenture', q: 'Accenture+consulting+OR+revenue+OR+contract+OR+strategy' },
+    { label: 'Airbus',    q: 'Airbus+aircraft+OR+orders+OR+A320+OR+A350+OR+defense' },
+    { label: 'SAP',       q: 'SAP+software+OR+cloud+OR+ERP+OR+enterprise' }
   ];
 
   function newsAge(ts) {
@@ -835,33 +828,58 @@ ${text}`;
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchNewsdata({ q }) {
-    const key = localStorage.getItem('newsdata-api-key');
-    if (!key) throw new Error('Clé newsdata.io requise — newsdata.io/register (gratuit)');
-    const url = `https://newsdata.io/api/1/latest?apikey=${key}&q=${encodeURIComponent(q)}&language=en&category=business,technology`;
-    const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`newsdata HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.status !== 'success') throw new Error(json.message || 'newsdata error');
-    return (json.results || []).slice(0, 6).map(a => ({
-      title  : a.title,
-      url    : a.link,
-      source : a.source_id || '',
-      date   : (a.pubDate || '').slice(0, 10)
-    }));
+  async function fetchViaGeminiUrl({ label, q }) {
+    const key = localStorage.getItem('gemini-api-key');
+    if (!key) throw new Error('Clé Gemini requise');
+    const rssUrl = `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
+    const prompt = `Read the RSS feed at this URL: ${rssUrl}
+Extract the 6 most recent news items specifically about the company ${label}.
+Return ONLY a JSON array, no explanation, no markdown:
+[{"title":"...","link":"...","source":"...","date":"YYYY-MM-DD"}]`;
+
+    for (const model of GEMINI_FALLBACKS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ url_context: {} }],
+            generationConfig: { temperature: 0 }
+          })
+        });
+        if (!res.ok) {
+          const e = await res.json();
+          const msg = e.error?.message || `HTTP ${res.status}`;
+          if (isNotFoundError(res.status, msg)) continue;
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const items = JSON.parse(text);
+        return Array.isArray(items) ? items : [];
+      } catch(e) {
+        if (e.message?.toLowerCase().includes('not found') ||
+            e.message?.toLowerCase().includes('not supported')) continue;
+        throw e;
+      }
+    }
+    throw new Error('Aucun modèle disponible');
   }
 
   function renderNewsHtml(items) {
-    return items.map(({ title, url, source, date }) =>
+    return items.map(({ title, link, url, source, date }) =>
       `<div class="news-entry">
-        <a href="${url}" target="_blank" rel="noopener">${title}</a>
+        <a href="${link || url || '#'}" target="_blank" rel="noopener">${title}</a>
         <div class="news-entry-meta">${[source, date].filter(Boolean).join(' · ')}</div>
       </div>`
     ).join('');
   }
 
   async function loadAllNews(force = false, triggerBtn = null) {
-    const cacheKey = 'news-cache-newsdata';
+    const cacheKey = 'news-cache-gemini-url';
 
     // Serve from cache if fresh
     if (!force) {
@@ -888,7 +906,7 @@ ${text}`;
     async function fetchWithRetry(query) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const items = await fetchNewsdata(query);
+          const items = await fetchViaGeminiUrl(query);
           if (items.length) return items;
         } catch(e) {
           if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
