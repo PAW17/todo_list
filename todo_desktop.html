@@ -538,6 +538,12 @@
                 </span>
             </div>
         </div>
+        <div class="config-group" style="flex:1">
+            <span class="config-label">News Worker</span>
+            <div class="config-key-wrap">
+                <input type="text" id="worker-url-input" class="config-key-input" placeholder="https://….workers.dev" oninput="saveWorkerUrl()">
+            </div>
+        </div>
         <span class="config-saved" id="config-saved">SAVED ✓</span>
     </div>
 
@@ -667,8 +673,8 @@
     if (savedKey) { keyInput.value = savedKey; document.getElementById('config-saved').style.display = 'block'; }
     const savedModel = localStorage.getItem('gemini-model');
     if (savedModel) { const s = document.getElementById('model-select'); if ([...s.options].some(o => o.value === savedModel)) s.value = savedModel; }
-    const savedNd = localStorage.getItem('newsdata-api-key');
-    if (savedNd) document.getElementById('newsdata-key-input').value = savedNd;
+    const savedWorker = localStorage.getItem('news-worker-url');
+    if (savedWorker) document.getElementById('worker-url-input').value = savedWorker;
   })();
 
   function saveApiKey() {
@@ -678,10 +684,10 @@
     else      { localStorage.removeItem('gemini-api-key'); saved.style.display = 'none'; }
   }
 
-  function saveNewsdataKey() {
-    const key = document.getElementById('newsdata-key-input').value.trim();
-    if (key) localStorage.setItem('newsdata-api-key', key);
-    else     localStorage.removeItem('newsdata-api-key');
+  function saveWorkerUrl() {
+    const url = document.getElementById('worker-url-input').value.trim();
+    if (url) { localStorage.setItem('news-worker-url', url); loadAllNews(true); }
+    else       localStorage.removeItem('news-worker-url');
   }
 
   function saveModel() { localStorage.setItem('gemini-model', document.getElementById('model-select').value); }
@@ -814,53 +820,117 @@ ${text}`;
     });
   })();
 
-  // ── News launcher tiles (Google News — toujours fonctionnel) ──
+  // ── News feed (via Cloudflare Worker proxy → Google News RSS) ──
+  const NEWS_TTL = 60 * 60 * 1000; // 1h cache
+
   const NEWS_COMPANIES = [
-    {
-      label   : 'Accenture',
-      url     : 'https://news.google.com/search?q=Accenture+consulting+OR+revenue+OR+strategy&hl=en',
-      topics  : 'consulting · revenue · strategy · AI'
-    },
-    {
-      label   : 'Airbus',
-      url     : 'https://news.google.com/search?q=Airbus+aircraft+OR+orders+OR+A320+OR+defense&hl=en',
-      topics  : 'aircraft · orders · A320 · defense'
-    },
-    {
-      label   : 'SAP',
-      url     : 'https://news.google.com/search?q=SAP+software+OR+cloud+OR+ERP+OR+RISE&hl=en',
-      topics  : 'software · cloud · ERP · RISE'
-    }
+    { label: 'Accenture', q: 'Accenture' },
+    { label: 'Airbus',    q: 'Airbus' },
+    { label: 'SAP',       q: 'SAP' }
   ];
 
-  // Rendu statique — tuile = lanceur Google News, toujours fonctionnel
-  function renderNewsTiles() {
-    NEWS_COMPANIES.forEach(({ label, url, topics }) => {
-      const el = document.getElementById(`news-${label.toLowerCase()}`);
-      if (!el) return;
-      el.innerHTML = `
-        <div style="display:flex;flex-direction:column;height:100%;padding:4px 0;gap:8px;">
-          <div style="font-size:11px;color:#bbb;line-height:1.5">${topics}</div>
-          <a href="${url}" target="_blank" rel="noopener"
-             style="display:flex;align-items:center;gap:6px;margin-top:auto;padding:8px 12px;
-                    background:#f5efff;border-radius:8px;color:#a100ff;font-size:12px;
-                    font-weight:600;text-decoration:none;transition:background 0.15s;"
-             onmouseover="this.style.background='#ede0ff'"
-             onmouseout="this.style.background='#f5efff'">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-            </svg>
-            Ouvrir dans Google News
-          </a>
-        </div>`;
-    });
+  function newsAge(ts) {
+    const m = Math.floor((Date.now() - ts) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  window.refreshNews = () => {}; // no-op, tuiles statiques
+  async function fetchFromWorker({ q }) {
+    const base = (localStorage.getItem('news-worker-url') || '').trim().replace(/\/$/, '');
+    if (!base) throw new Error('Worker URL non configurée');
+    const res = await fetch(`${base}?q=${encodeURIComponent(q)}`,
+                            { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`Worker HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return (json.items || []).slice(0, 6).map(a => ({
+      title  : a.title,
+      url    : a.link,
+      source : a.source,
+      date   : a.date ? new Date(a.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'}) : ''
+    }));
+  }
 
-  renderNewsTiles();
+  function renderNewsHtml(items) {
+    return items.map(({ title, url, source, date }) =>
+      `<div class="news-entry">
+        <a href="${url}" target="_blank" rel="noopener">${title}</a>
+        <div class="news-entry-meta">${[source, date].filter(Boolean).join(' · ')}</div>
+      </div>`
+    ).join('');
+  }
+
+  function renderLauncherTile(label, q) {
+    const gnUrl = `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=en`;
+    return `<div style="display:flex;flex-direction:column;height:100%;padding:4px 0;gap:8px;">
+      <div style="font-size:11px;color:#bbb">Worker URL non configurée — entre-la dans la config bar</div>
+      <a href="${gnUrl}" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:6px;margin-top:auto;padding:8px 12px;
+                background:#f5efff;border-radius:8px;color:#a100ff;font-size:12px;
+                font-weight:600;text-decoration:none;"
+         onmouseover="this.style.background='#ede0ff'" onmouseout="this.style.background='#f5efff'">
+        ↗ Ouvrir dans Google News
+      </a></div>`;
+  }
+
+  async function loadAllNews(force = false, triggerBtn = null) {
+    const cacheKey = 'news-cache-worker';
+    if (!force) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (cached && (Date.now() - cached.ts) < NEWS_TTL) {
+          NEWS_COMPANIES.forEach(({ label }) => {
+            const el  = document.getElementById(`news-${label.toLowerCase()}`);
+            const age = el?.closest('.news-tile')?.querySelector('.news-age');
+            if (el && cached.data[label]) el.innerHTML = renderNewsHtml(cached.data[label]);
+            if (age) age.textContent = newsAge(cached.ts);
+          });
+          return;
+        }
+      } catch(_) {}
+    }
+
+    const workerUrl = localStorage.getItem('news-worker-url');
+    if (!workerUrl) {
+      NEWS_COMPANIES.forEach(({ label, q }) => {
+        const el = document.getElementById(`news-${label.toLowerCase()}`);
+        if (el) el.innerHTML = renderLauncherTile(label, q);
+      });
+      return;
+    }
+
+    NEWS_COMPANIES.forEach(({ label }) => {
+      document.getElementById(`news-${label.toLowerCase()}`).innerHTML =
+        '<div class="news-placeholder">Loading…</div>';
+    });
+    if (triggerBtn) triggerBtn.classList.add('spinning');
+
+    const data = {};
+    let anySuccess = false;
+    for (const cfg of NEWS_COMPANIES) {
+      const { label } = cfg;
+      const el  = document.getElementById(`news-${label.toLowerCase()}`);
+      const age = el?.closest('.news-tile')?.querySelector('.news-age');
+      try {
+        const items = await fetchFromWorker(cfg);
+        if (items.length) {
+          data[label] = items;
+          el.innerHTML = renderNewsHtml(items);
+          if (age) age.textContent = 'just now';
+          anySuccess = true;
+        } else {
+          el.innerHTML = `<div class="news-placeholder">No results</div>`;
+        }
+      } catch(e) {
+        el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    if (anySuccess) localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+    if (triggerBtn) triggerBtn.classList.remove('spinning');
+  }
+
+  window.refreshNews = (_c, _id, btn, force) => loadAllNews(force, btn);
+  loadAllNews();
 
   function calcCopy() {
     const val = document.getElementById('calc-result-value').textContent;
