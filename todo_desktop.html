@@ -843,6 +843,7 @@ Return ONLY a JSON array, no explanation, no markdown:
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(12000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             tools: [{ url_context: {} }],
@@ -904,16 +905,9 @@ Return ONLY a JSON array, no explanation, no markdown:
     if (triggerBtn) triggerBtn.classList.add('spinning');
 
     async function fetchWithRetry(query) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const items = await fetchViaGeminiUrl(query);
-          if (items.length) return items;
-        } catch(e) {
-          if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
-          else throw e;
-        }
-      }
-      return [];
+      try {
+        return await fetchViaGeminiUrl(query);
+      } catch(e) { throw e; }
     }
 
     const data = {};
@@ -936,7 +930,7 @@ Return ONLY a JSON array, no explanation, no markdown:
       } catch(e) {
         el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
       }
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 500));
     }
 
     if (anySuccess) {
