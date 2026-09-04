@@ -806,55 +806,74 @@ ${text}`;
     });
   })();
 
-  // ── News feed (via Gemini Google Search grounding) ───
-  const NEWS_TTL = 60 * 60 * 1000; // 1 hour cache
+  // ── News feed (single Gemini call, no grounding) ────
+  const NEWS_TTL = 60 * 60 * 1000; // 1h cache
+  const NEWS_COMPANIES = ['Accenture', 'Airbus', 'SAP'];
 
   function newsAge(ts) {
     const m = Math.floor((Date.now() - ts) / 60000);
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function refreshNews(company, elementId, btn, force = false) {
-    const container = document.getElementById(elementId);
-    const cacheKey  = `news-cache-${company.toLowerCase()}`;
+  function renderNewsHtml(items) {
+    return items.map(({ title, source }) =>
+      `<div class="news-entry">
+        <a href="#" onclick="return false" style="cursor:default">${title}</a>
+        <div class="news-entry-meta">${source || ''}</div>
+      </div>`
+    ).join('');
+  }
 
-    // Use cache if fresh and not a manual refresh
+  async function loadAllNews(force = false, triggerBtn = null) {
+    const cacheKey = 'news-cache-all';
+
+    // Use cache if fresh
     if (!force) {
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
         if (cached && (Date.now() - cached.ts) < NEWS_TTL) {
-          container.innerHTML = cached.html;
-          // Update age label in header
-          const label = container.closest('.news-tile')?.querySelector('.news-age');
-          if (label) label.textContent = newsAge(cached.ts);
+          NEWS_COMPANIES.forEach(c => {
+            const el = document.getElementById(`news-${c.toLowerCase()}`);
+            if (el && cached.data[c]) el.innerHTML = renderNewsHtml(cached.data[c]);
+            const age = el?.closest('.news-tile')?.querySelector('.news-age');
+            if (age) age.textContent = newsAge(cached.ts);
+          });
           return;
         }
       } catch(_) {}
     }
 
-    container.innerHTML = '<div class="news-placeholder">Loading…</div>';
-    if (btn) btn.classList.add('spinning');
+    // Show loading
+    NEWS_COMPANIES.forEach(c => {
+      document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
+        '<div class="news-placeholder">Loading…</div>';
+    });
+    if (triggerBtn) triggerBtn.classList.add('spinning');
 
     const key = localStorage.getItem('gemini-api-key');
     if (!key) {
-      container.innerHTML = '<div class="news-placeholder">API key required</div>';
-      if (btn) btn.classList.remove('spinning');
+      NEWS_COMPANIES.forEach(c => {
+        document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
+          '<div class="news-placeholder">API key required</div>';
+      });
+      if (triggerBtn) triggerBtn.classList.remove('spinning');
       return;
     }
 
-    const body = JSON.stringify({
-      contents: [{ parts: [{ text:
-        `List the 6 most recent news headlines about ${company} from the last 48 hours. For each: title and date only.`
-      }] }],
-      tools: [{ google_search: {} }]
-    });
+    const prompt = `Give me the 5 most important recent news headlines for each of these companies: Accenture, Airbus, SAP.
+Return ONLY a JSON object, no markdown, no explanation:
+{"Accenture":[{"title":"...","source":"..."}],"Airbus":[{"title":"...","source":"..."}],"SAP":[{"title":"...","source":"..."}]}`;
 
     let lastError = '', done = false;
 
     for (const model of GEMINI_FALLBACKS) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
       try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+        });
         if (!res.ok) {
           const e = await res.json();
           const msg = e.error?.message || `HTTP ${res.status}`;
@@ -863,44 +882,39 @@ ${text}`;
           break;
         }
         const data = await res.json();
-        const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        let html = '';
+        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        // Strip possible markdown code fences
+        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(text);
 
-        if (chunks.length > 0) {
-          html = chunks.slice(0, 6).map(c => {
-            const title = c.web?.title || '(no title)';
-            const uri   = c.web?.uri   || '#';
-            let src = '';
-            try { src = new URL(uri).hostname.replace(/^www\./, ''); } catch(_) {}
-            return `<div class="news-entry">
-              <a href="${uri}" target="_blank" rel="noopener">${title}</a>
-              <div class="news-entry-meta">${src}</div>
-            </div>`;
-          }).join('');
-        } else {
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No results';
-          html = `<div style="font-size:11px;padding:4px 0;color:#4a4a4a;line-height:1.6;white-space:pre-wrap">${text}</div>`;
-        }
+        const ts = Date.now();
+        localStorage.setItem(cacheKey, JSON.stringify({ data: parsed, ts }));
 
-        container.innerHTML = html;
-        // Save to cache
-        localStorage.setItem(cacheKey, JSON.stringify({ html, ts: Date.now() }));
-        // Update age label
-        const label = container.closest('.news-tile')?.querySelector('.news-age');
-        if (label) label.textContent = 'just now';
+        NEWS_COMPANIES.forEach(c => {
+          const el = document.getElementById(`news-${c.toLowerCase()}`);
+          if (el && parsed[c]) el.innerHTML = renderNewsHtml(parsed[c]);
+          const age = el?.closest('.news-tile')?.querySelector('.news-age');
+          if (age) age.textContent = 'just now';
+        });
         done = true;
         break;
       } catch(e) { lastError = e.message; break; }
     }
 
-    if (!done) container.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
-    if (btn) btn.classList.remove('spinning');
+    if (!done) {
+      NEWS_COMPANIES.forEach(c => {
+        document.getElementById(`news-${c.toLowerCase()}`).innerHTML =
+          `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${lastError}</div>`;
+      });
+    }
+    if (triggerBtn) triggerBtn.classList.remove('spinning');
   }
 
-  // Load on startup — staggered by 4s to respect rate limits; each uses cache if fresh
-  setTimeout(() => refreshNews('Accenture', 'news-accenture'), 500);
-  setTimeout(() => refreshNews('Airbus',    'news-airbus'),    4500);
-  setTimeout(() => refreshNews('SAP',       'news-sap'),       8500);
+  // Expose for refresh buttons
+  window.refreshNews = (company, elementId, btn, force) => loadAllNews(force, btn);
+
+  // Load on startup
+  setTimeout(() => loadAllNews(), 800);
 
   function calcCopy() {
     const val = document.getElementById('calc-result-value').textContent;
