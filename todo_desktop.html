@@ -530,12 +530,18 @@
             </select>
         </div>
         <div class="config-group" style="flex:1">
-            <span class="config-label">Gemini API Key</span>
+            <span class="config-label">Gemini Key</span>
             <div class="config-key-wrap">
                 <input type="password" id="api-key-input" class="config-key-input" placeholder="AIzaSy..." oninput="saveApiKey()">
                 <span class="config-eye" onclick="toggleKeyVisibility()" title="Afficher / masquer">
                     <svg id="eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </span>
+            </div>
+        </div>
+        <div class="config-group" style="flex:1">
+            <span class="config-label">AV Key</span>
+            <div class="config-key-wrap">
+                <input type="password" id="av-key-input" class="config-key-input" placeholder="Alpha Vantage..." oninput="saveAvKey()">
             </div>
         </div>
         <span class="config-saved" id="config-saved">SAVED ✓</span>
@@ -667,6 +673,8 @@
     if (savedKey) { keyInput.value = savedKey; document.getElementById('config-saved').style.display = 'block'; }
     const savedModel = localStorage.getItem('gemini-model');
     if (savedModel) { const s = document.getElementById('model-select'); if ([...s.options].some(o => o.value === savedModel)) s.value = savedModel; }
+    const savedAv = localStorage.getItem('alphavantage-api-key');
+    if (savedAv) document.getElementById('av-key-input').value = savedAv;
   })();
 
   function saveApiKey() {
@@ -674,6 +682,12 @@
     const saved = document.getElementById('config-saved');
     if (key) { localStorage.setItem('gemini-api-key', key); saved.style.display = 'block'; }
     else      { localStorage.removeItem('gemini-api-key'); saved.style.display = 'none'; }
+  }
+
+  function saveAvKey() {
+    const key = document.getElementById('av-key-input').value.trim();
+    if (key) localStorage.setItem('alphavantage-api-key', key);
+    else     localStorage.removeItem('alphavantage-api-key');
   }
 
   function saveModel() { localStorage.setItem('gemini-model', document.getElementById('model-select').value); }
@@ -806,17 +820,14 @@ ${text}`;
     });
   })();
 
-  // ── News feed (The Guardian API — free, no credit card) ──
-  const NEWS_TTL      = 60 * 60 * 1000; // 1h cache
-  // 'test' key works without registration (rate-limited); replace with free key from
-  // https://bonobo.capi.gutools.co.uk/register/developer for higher limits
-  const GUARDIAN_KEY  = localStorage.getItem('guardian-api-key') || 'test';
+  // ── News feed (Alpha Vantage — financial news by ticker) ──
+  const NEWS_TTL = 60 * 60 * 1000; // 1h cache
 
-  // Per-company search config: query + section to ensure relevance
+  // Ticker mapping: ACN=Accenture, EADSY=Airbus ADR, SAP=SAP
   const NEWS_COMPANIES = [
-    { label: 'Accenture', q: '"Accenture"',           section: 'business' },
-    { label: 'Airbus',    q: '"Airbus" aircraft OR aviation OR orders OR contract', section: 'business' },
-    { label: 'SAP',       q: '"SAP" software OR cloud OR enterprise OR ERP',        section: 'technology' }
+    { label: 'Accenture', ticker: 'ACN'   },
+    { label: 'Airbus',    ticker: 'EADSY' },
+    { label: 'SAP',       ticker: 'SAP'   }
   ];
 
   function newsAge(ts) {
@@ -824,36 +835,40 @@ ${text}`;
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchGuardian({ q, section }) {
-    const params = new URLSearchParams({
-      q,
-      section,
-      'order-by': 'newest',
-      'page-size': 6,
-      'api-key': GUARDIAN_KEY
-    });
-    const url = `https://content.guardianapis.com/search?${params}`;
-    const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`Guardian HTTP ${res.status}`);
+  async function fetchAlphaVantage({ ticker }) {
+    const key = localStorage.getItem('alphavantage-api-key');
+    if (!key) throw new Error('AV key required — enter it in the config bar');
+    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${ticker}&apikey=${key}&limit=10&sort=LATEST`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`AV HTTP ${res.status}`);
     const json = await res.json();
-    return (json.response?.results || []).map(a => ({
-      title : a.webTitle,
-      url   : a.webUrl,
-      date  : a.webPublicationDate?.slice(0, 10) || ''
-    }));
+    if (json.Note)        throw new Error('Rate limit — wait 1 min (free: 25 req/day)');
+    if (json.Information) throw new Error(json.Information);
+    return (json.feed || [])
+      .filter(a => {
+        const ts = (a.ticker_sentiment || []).find(t => t.ticker === ticker);
+        return !ts || parseFloat(ts.relevance_score || 0) > 0.25;
+      })
+      .slice(0, 6)
+      .map(a => ({
+        title  : a.title,
+        url    : a.url,
+        source : a.source,
+        date   : (a.time_published || '').slice(0, 8).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')
+      }));
   }
 
   function renderNewsHtml(items) {
-    return items.map(({ title, url, date }) =>
+    return items.map(({ title, url, source, date }) =>
       `<div class="news-entry">
         <a href="${url}" target="_blank" rel="noopener">${title}</a>
-        <div class="news-entry-meta">The Guardian · ${date}</div>
+        <div class="news-entry-meta">${[source, date].filter(Boolean).join(' · ')}</div>
       </div>`
     ).join('');
   }
 
   async function loadAllNews(force = false, triggerBtn = null) {
-    const cacheKey = 'news-cache-guardian';
+    const cacheKey = 'news-cache-av';
 
     // Serve from cache if fresh
     if (!force) {
@@ -877,11 +892,10 @@ ${text}`;
     });
     if (triggerBtn) triggerBtn.classList.add('spinning');
 
-    // Fetch sequentially with delay + 1 retry to avoid test-key rate limits
     async function fetchWithRetry(query) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const items = await fetchGuardian(query);
+          const items = await fetchAlphaVantage(query);
           if (items.length) return items;
         } catch(e) {
           if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
