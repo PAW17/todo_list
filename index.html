@@ -67,7 +67,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
-  import { getDatabase, ref, push, onValue, remove, set, query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+  import { getDatabase, ref, push, onValue, remove, set, update, query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
@@ -151,6 +151,8 @@
         renderTask(childSnapshot.key, childSnapshot.val().text);
     });
     if (filterActive) applyFilter();
+  }, (error) => {
+    console.error('Firebase error:', error);
   });
 
   function renderTask(id, text) {
@@ -234,21 +236,10 @@
 
 function saveNewOrder() {
     const updates = {};
-    const items = document.querySelectorAll('#taskList li');
-    
-    items.forEach((li, index) => {
-        const id = li.dataset.id;
-        const text = li.querySelector('.task-text').textContent;
-        
-        // On réattribue un ordre propre de 0 à X
-        updates[id] = { 
-            text: text, 
-            order: index 
-        };
+    document.querySelectorAll('#taskList li').forEach((li, index) => {
+        updates[`${li.dataset.id}/order`] = index;
     });
-    
-    // On utilise set pour mettre à jour toute la liste d'un coup
-    set(tasksRef, updates);
+    update(tasksRef, updates);
 }
 
 window.addTask = function() {
