@@ -864,26 +864,42 @@ ${text}`;
     });
     if (triggerBtn) triggerBtn.classList.add('spinning');
 
-    // Fetch all 3 companies in parallel
-    const results = await Promise.allSettled(
-      NEWS_COMPANIES.map(c => fetchGuardian(c))
-    );
+    // Fetch sequentially with delay + 1 retry to avoid test-key rate limits
+    async function fetchWithRetry(query) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const items = await fetchGuardian(query);
+          if (items.length) return items;
+        } catch(e) {
+          if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+          else throw e;
+        }
+      }
+      return [];
+    }
 
     const data = {};
     let anySuccess = false;
-    NEWS_COMPANIES.forEach((c, i) => {
+
+    for (const c of NEWS_COMPANIES) {
       const el  = document.getElementById(`news-${c.toLowerCase()}`);
       const age = el?.closest('.news-tile')?.querySelector('.news-age');
-      if (results[i].status === 'fulfilled' && results[i].value.length) {
-        data[c] = results[i].value;
-        el.innerHTML = renderNewsHtml(data[c]);
-        if (age) age.textContent = 'just now';
-        anySuccess = true;
-      } else {
-        const msg = results[i].reason?.message || 'Unavailable';
-        el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${msg}</div>`;
+      try {
+        const items = await fetchWithRetry(c);
+        if (items.length) {
+          data[c] = items;
+          el.innerHTML = renderNewsHtml(items);
+          if (age) age.textContent = 'just now';
+          anySuccess = true;
+        } else {
+          el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">No results</div>`;
+        }
+      } catch(e) {
+        el.innerHTML = `<div class="news-placeholder" style="color:#e0c8f8">⚠ ${e.message}</div>`;
       }
-    });
+      // Small pause between requests to respect rate limit
+      await new Promise(r => setTimeout(r, 1500));
+    }
 
     if (anySuccess) {
       localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
