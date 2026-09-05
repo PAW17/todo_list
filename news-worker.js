@@ -1,11 +1,7 @@
 /**
  * Cloudflare Worker — News proxy
  * Bing News RSS + optional direct RSS feed + optional JSON index (Accenture)
- *
- * Usage:
- *   GET ?q=Accenture
- *   GET ?q=SAP&rss=https://news.sap.com/feed/
- *   GET ?q=Accenture&json=https://newsroom.accenture.com/query-index.json&base=https://newsroom.accenture.com
+ * Sources fetched in PARALLEL for speed.
  */
 
 export default {
@@ -14,53 +10,68 @@ export default {
 
     const { searchParams } = new URL(request.url);
     const q    = searchParams.get('q');
-    const rss  = searchParams.get('rss');   // direct RSS feed URL
-    const json = searchParams.get('json');  // JSON index URL (Accenture format)
-    const base = searchParams.get('base');  // base URL to prepend to article paths
+    const rss  = searchParams.get('rss');
+    const json = searchParams.get('json');
+    const base = searchParams.get('base');
 
     if (!q) return reply(JSON.stringify({ error: 'missing ?q=' }), 400);
 
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    let items = [];
+
+    // Build parallel fetch promises
+    const fetches = [];
 
     // 1. Bing News RSS
-    try {
-      const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS&sortby=Date`;
-      const bingRes = await fetch(bingUrl, { headers: { 'User-Agent': UA, 'Accept': 'application/rss+xml, */*' } });
-      items = parseRss(await bingRes.text());
-    } catch (_) {}
+    fetches.push(
+      fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS&sortby=Date`,
+            { headers: { 'User-Agent': UA, 'Accept': 'application/rss+xml, */*' } })
+        .then(r => r.text()).then(xml => parseRss(xml)).catch(() => [])
+    );
 
-    // 2. Optional direct RSS feed (e.g. SAP newsroom)
+    // 2. Optional direct RSS feed (SAP newsroom)
     if (rss) {
-      try {
-        const rssRes = await fetch(rss, { headers: { 'User-Agent': UA } });
-        const extra  = parseRss(await rssRes.text());
-        const seen   = new Set(items.map(i => i.title));
-        for (const item of extra) {
-          if (!seen.has(item.title)) { items.push(item); seen.add(item.title); }
-        }
-      } catch (_) {}
+      fetches.push(
+        fetch(rss, { headers: { 'User-Agent': UA } })
+          .then(r => r.text()).then(xml => parseRss(xml)).catch(() => [])
+      );
     }
 
     // 3. Optional JSON index (Accenture query-index.json)
     if (json && base) {
-      try {
-        const cutoff30 = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-        const jsonRes  = await fetch(json, { headers: { 'User-Agent': UA } });
-        const data     = await jsonRes.json();
-        const seen     = new Set(items.map(i => i.title));
-        for (const article of (data.data || [])) {
-          const ts = parseInt(article.publisheddateinseconds || '0', 10);
-          if (ts < cutoff30) break; // data is sorted newest first, stop when too old
-          const item = {
-            title : article.title || '',
-            link  : base + article.path,
-            date  : ts ? new Date(ts * 1000).toUTCString() : '',
-            source: 'Accenture Newsroom'
-          };
-          if (item.title && !seen.has(item.title)) { items.push(item); seen.add(item.title); }
+      const cutoff30 = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+      fetches.push(
+        fetch(json, { headers: { 'User-Agent': UA } })
+          .then(r => r.json())
+          .then(data => {
+            const out = [];
+            for (const article of (data.data || [])) {
+              const ts = parseInt(article.publisheddateinseconds || '0', 10);
+              if (ts < cutoff30) break; // sorted newest first
+              if (article.title) out.push({
+                title : article.title,
+                link  : base + article.path,
+                date  : new Date(ts * 1000).toUTCString(),
+                source: 'Accenture Newsroom'
+              });
+            }
+            return out;
+          }).catch(() => [])
+      );
+    }
+
+    // Run all in parallel
+    const results = await Promise.all(fetches);
+
+    // Merge and deduplicate by title
+    const seen  = new Set();
+    const items = [];
+    for (const batch of results) {
+      for (const item of batch) {
+        if (item.title && !seen.has(item.title)) {
+          items.push(item);
+          seen.add(item.title);
         }
-      } catch (_) {}
+      }
     }
 
     // Sort by date descending
