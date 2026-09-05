@@ -1,68 +1,79 @@
 /**
  * Cloudflare Worker — News proxy
- * Bing News RSS + optional direct RSS feed + optional JSON index (Accenture)
- * Sources fetched in PARALLEL for speed.
+ * Sources officiales codées dans le Worker selon le mot-clé q.
+ * Usage simple : GET ?q=Accenture | ?q=SAP | ?q=Airbus
  */
+
+const OFFICIAL_SOURCES = {
+  'accenture': {
+    type: 'json-index',
+    url : 'https://newsroom.accenture.com/query-index.json',
+    base: 'https://newsroom.accenture.com',
+    source: 'Accenture Newsroom'
+  },
+  'sap': {
+    type: 'rss',
+    url : 'https://news.sap.com/feed/'
+  }
+  // Airbus : Bing uniquement (pas de source officielle disponible)
+};
 
 export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return reply(null, 204);
 
     const { searchParams } = new URL(request.url);
-    const q    = searchParams.get('q');
-    const rss  = searchParams.get('rss');
-    const json = searchParams.get('json');
-    const base = searchParams.get('base');
-
+    const q = searchParams.get('q');
     if (!q) return reply(JSON.stringify({ error: 'missing ?q=' }), 400);
 
-    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const UA  = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const key = q.toLowerCase().split(/\s+/)[0]; // premier mot = clé de recherche
+    const official = OFFICIAL_SOURCES[key];
 
-    // Build parallel fetch promises
-    const fetches = [];
+    // Build parallel promises
+    const promises = [];
 
-    // 1. Bing News RSS
-    fetches.push(
+    // 1. Bing News RSS (toujours)
+    promises.push(
       fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS&sortby=Date`,
             { headers: { 'User-Agent': UA, 'Accept': 'application/rss+xml, */*' } })
-        .then(r => r.text()).then(xml => parseRss(xml)).catch(() => [])
+        .then(r => r.text()).then(parseRss).catch(() => [])
     );
 
-    // 2. Optional direct RSS feed (SAP newsroom)
-    if (rss) {
-      fetches.push(
-        fetch(rss, { headers: { 'User-Agent': UA } })
-          .then(r => r.text()).then(xml => parseRss(xml)).catch(() => [])
-      );
+    // 2. Source officielle si connue
+    if (official) {
+      if (official.type === 'rss') {
+        promises.push(
+          fetch(official.url, { headers: { 'User-Agent': UA } })
+            .then(r => r.text()).then(parseRss).catch(() => [])
+        );
+      } else if (official.type === 'json-index') {
+        const cutoff = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+        promises.push(
+          fetch(official.url, { headers: { 'User-Agent': UA } })
+            .then(r => r.json())
+            .then(data => {
+              const out = [];
+              for (const a of (data.data || [])) {
+                const ts = parseInt(a.publisheddateinseconds || '0', 10);
+                if (ts < cutoff) break;
+                if (a.title) out.push({
+                  title : a.title,
+                  link  : official.base + a.path,
+                  date  : new Date(ts * 1000).toUTCString(),
+                  source: official.source
+                });
+              }
+              return out;
+            }).catch(() => [])
+        );
+      }
     }
 
-    // 3. Optional JSON index (Accenture query-index.json)
-    if (json && base) {
-      const cutoff30 = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-      fetches.push(
-        fetch(json, { headers: { 'User-Agent': UA } })
-          .then(r => r.json())
-          .then(data => {
-            const out = [];
-            for (const article of (data.data || [])) {
-              const ts = parseInt(article.publisheddateinseconds || '0', 10);
-              if (ts < cutoff30) break; // sorted newest first
-              if (article.title) out.push({
-                title : article.title,
-                link  : base + article.path,
-                date  : new Date(ts * 1000).toUTCString(),
-                source: 'Accenture Newsroom'
-              });
-            }
-            return out;
-          }).catch(() => [])
-      );
-    }
+    // Run in parallel
+    const results = await Promise.all(promises);
 
-    // Run all in parallel
-    const results = await Promise.all(fetches);
-
-    // Merge and deduplicate by title
+    // Merge + deduplicate
     const seen  = new Set();
     const items = [];
     for (const batch of results) {
@@ -74,24 +85,22 @@ export default {
       }
     }
 
-    // Sort by date descending
-    items.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : 0;
-      const db = b.date ? new Date(b.date).getTime() : 0;
-      return db - da;
-    });
+    // Sort newest first
+    items.sort((a, b) =>
+      (b.date ? new Date(b.date).getTime() : 0) -
+      (a.date ? new Date(a.date).getTime() : 0)
+    );
 
     return reply(JSON.stringify({ items: items.slice(0, 20) }), 200);
   }
 };
 
-/* ── XML helpers ── */
 function parseRss(xml) {
   const items = [];
   const rx = /<item>([\s\S]*?)<\/item>/g;
   let m;
   while ((m = rx.exec(xml)) !== null) {
-    const s      = m[1];
+    const s = m[1];
     const title  = cdata(s, 'title')  || tag(s, 'title');
     const link   = tag(s, 'link')     || tag(s, 'guid');
     const date   = tag(s, 'pubDate');
