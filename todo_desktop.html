@@ -824,7 +824,7 @@ ${text}`;
   const NEWS_TTL = 60 * 60 * 1000; // 1h cache
 
   const NEWS_COMPANIES = [
-    { label: 'Accenture', q: 'Accenture' },
+    { label: 'Accenture', q: 'Accenture', json: 'https://newsroom.accenture.com/query-index.json', base: 'https://newsroom.accenture.com' },
     { label: 'Airbus',    q: 'Airbus' },
     { label: 'SAP',       q: 'SAP enterprise software', rss: 'https://news.sap.com/feed/' }
   ];
@@ -834,12 +834,14 @@ ${text}`;
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchFromWorker({ q, rss }) {
-    const base = (localStorage.getItem('news-worker-url') || '').trim().replace(/\/$/, '');
-    if (!base) throw new Error('Worker URL non configurée');
-    let url = `${base}?q=${encodeURIComponent(q)}`;
-    if (rss) url += `&rss=${encodeURIComponent(rss)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  async function fetchFromWorker({ q, rss, json, base: jsonBase }) {
+    const workerBase = (localStorage.getItem('news-worker-url') || '').trim().replace(/\/$/, '');
+    if (!workerBase) throw new Error('Worker URL non configurée');
+    let url = `${workerBase}?q=${encodeURIComponent(q)}`;
+    if (rss)      url += `&rss=${encodeURIComponent(rss)}`;
+    if (json)     url += `&json=${encodeURIComponent(json)}`;
+    if (jsonBase) url += `&base=${encodeURIComponent(jsonBase)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!res.ok) throw new Error(`Worker HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
