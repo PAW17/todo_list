@@ -5,6 +5,8 @@
  * Usage : GET https://your-worker.workers.dev?q=Accenture
  */
 
+const MAX_AGE_DAYS = 7; // ne renvoyer que les news des 7 derniers jours
+
 export default {
   async fetch(request) {
     // CORS preflight
@@ -17,7 +19,7 @@ export default {
     if (!q) return reply(JSON.stringify({ error: 'missing ?q=' }), 400);
 
     const rssUrl =
-      `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS`;
+      `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS&sortby=Date`;
 
     try {
       const res = await fetch(rssUrl, {
@@ -26,8 +28,15 @@ export default {
           'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         }
       });
-      const xml   = await res.text();
-      const items = parseRss(xml).slice(0, 8);
+      const xml  = await res.text();
+      const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+      const items = parseRss(xml)
+        .filter(item => {
+          if (!item.date) return true;
+          const d = new Date(item.date).getTime();
+          return isNaN(d) || d >= cutoff;
+        })
+        .slice(0, 8);
       return reply(JSON.stringify({ items }), 200);
     } catch (e) {
       return reply(JSON.stringify({ error: e.message }), 500);
