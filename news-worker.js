@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker — Google News RSS proxy
+ * Cloudflare Worker — Bing News RSS proxy
  * Déploiement : https://workers.cloudflare.com (gratuit, pas de carte)
  *
  * Usage : GET https://your-worker.workers.dev?q=Accenture
@@ -17,11 +17,14 @@ export default {
     if (!q) return reply(JSON.stringify({ error: 'missing ?q=' }), 400);
 
     const rssUrl =
-      `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en&gl=US&ceid=US:en`;
+      `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=RSS`;
 
     try {
       const res = await fetch(rssUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' }
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+        }
       });
       const xml   = await res.text();
       const items = parseRss(xml).slice(0, 8);
