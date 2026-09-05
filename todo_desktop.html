@@ -826,7 +826,7 @@ ${text}`;
   const NEWS_COMPANIES = [
     { label: 'Accenture', q: 'Accenture' },
     { label: 'Airbus',    q: 'Airbus' },
-    { label: 'SAP',       q: 'SAP enterprise software' }
+    { label: 'SAP',       q: 'SAP enterprise software', rss: 'https://news.sap.com/feed/' }
   ];
 
   function newsAge(ts) {
@@ -834,11 +834,12 @@ ${text}`;
     return m < 1 ? 'just now' : m < 60 ? `${m}min ago` : `${Math.floor(m/60)}h ago`;
   }
 
-  async function fetchFromWorker({ q }) {
+  async function fetchFromWorker({ q, rss }) {
     const base = (localStorage.getItem('news-worker-url') || '').trim().replace(/\/$/, '');
     if (!base) throw new Error('Worker URL non configurée');
-    const res = await fetch(`${base}?q=${encodeURIComponent(q)}`,
-                            { signal: AbortSignal.timeout(8000) });
+    let url = `${base}?q=${encodeURIComponent(q)}`;
+    if (rss) url += `&rss=${encodeURIComponent(rss)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`Worker HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
