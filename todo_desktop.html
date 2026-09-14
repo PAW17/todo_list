@@ -316,6 +316,34 @@
         mark.sh { background: #fef08a; color: inherit; border-radius: 2px; }
         mark.sh.current { background: #a100ff; color: white; border-radius: 2px; }
 
+        /* ── NOTES FORMAT BAR ── */
+        .notes-format-bar {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 14px;
+            border-bottom: 1px solid #f0eafc;
+            flex-shrink: 0;
+        }
+        .fmt-color {
+            width: 17px; height: 17px; border-radius: 50%;
+            border: 2px solid transparent; cursor: pointer;
+            transition: transform 0.12s, border-color 0.12s;
+            outline: none; padding: 0; flex-shrink: 0;
+        }
+        .fmt-color:hover { transform: scale(1.25); border-color: rgba(0,0,0,0.18); }
+        .fmt-sep { width: 1px; height: 14px; background: #ede8f8; margin: 0 2px; flex-shrink: 0; }
+        .fmt-clear {
+            width: 17px; height: 17px; border-radius: 50%;
+            border: 2px solid #e0d8f0; cursor: pointer;
+            background: white; font-size: 9px; color: #bbb;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.12s, border-color 0.12s, color 0.12s;
+            outline: none; padding: 0; flex-shrink: 0; font-family: inherit;
+        }
+        .fmt-clear:hover { transform: scale(1.25); border-color: #a100ff; color: #a100ff; }
+        .fmt-hint { font-size: 10px; color: #ddd; margin-left: auto; white-space: nowrap; user-select: none; }
+
         /* ── AI PANEL ── */
         .ai-panel {
             background: white;
@@ -588,6 +616,25 @@
 
     <!-- NOTES -->
     <div class="notes-wrapper">
+        <!-- FORMAT BAR -->
+        <div class="notes-format-bar">
+            <!-- Couleurs de texte -->
+            <button class="fmt-color" style="background:#1a1a1a"
+                    onclick="fmtColor('fore','#1a1a1a')" title="Noir"></button>
+            <button class="fmt-color" style="background:#a100ff"
+                    onclick="fmtColor('fore','#a100ff')" title="Violet"></button>
+            <button class="fmt-color" style="background:#ef4444"
+                    onclick="fmtColor('fore','#ef4444')" title="Rouge"></button>
+            <div class="fmt-sep"></div>
+            <!-- Surlignage -->
+            <button class="fmt-color" style="background:#fef08a; border-color:#d4c200"
+                    onclick="fmtColor('back','#fef08a')" title="Surligner en jaune"></button>
+            <div class="fmt-sep"></div>
+            <!-- Effacer -->
+            <button class="fmt-clear" onclick="fmtClear()" title="Effacer la mise en forme">✕</button>
+            <span class="fmt-hint">Sélectionne du texte puis clique une couleur</span>
+        </div>
+
         <div class="notes-search-bar" id="notes-search-bar">
             <input type="text" id="notes-search-input" class="notes-search-input" placeholder="Rechercher dans les notes…"
                    oninput="searchNotes(this.value)"
@@ -1091,6 +1138,29 @@ ${text}`;
   }
 
   function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  // ── Notes colour palette ───────────────────────────────────
+  function fmtColor(type, color) {
+    const el  = document.getElementById('notes-content');
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    // Make sure the selection is inside the notes area
+    if (!el.contains(sel.anchorNode)) return;
+    el.focus();
+    document.execCommand('styleWithCSS', false, true);
+    if (type === 'fore') document.execCommand('foreColor',  false, color);
+    else                 document.execCommand('hiliteColor', false, color);
+  }
+
+  function fmtClear() {
+    const el  = document.getElementById('notes-content');
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (!el.contains(sel.anchorNode)) return;
+    el.focus();
+    document.execCommand('removeFormat', false, null);
+  }
+  // ──────────────────────────────────────────────────────────
 
   // Ctrl+F → open search (intercept browser find)
   document.addEventListener('keydown', e => {
