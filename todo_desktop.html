@@ -248,23 +248,20 @@
 
         /* ── CONFIG TOGGLE BUTTON ── */
         #config-toggle {
-            position: absolute;
-            top: 24px;
-            right: 314px; /* left of the 280px calc widget */
-            width: 28px; height: 28px;
-            border-radius: 8px;
-            border: 1px solid #e8e0f8;
-            background: white;
+            align-self: flex-end;
+            width: 20px; height: 20px;
+            border: none;
+            background: transparent;
             cursor: pointer;
-            font-size: 13px;
-            color: #bbb;
+            font-size: 14px;
+            color: #ccc;
             display: flex; align-items: center; justify-content: center;
-            z-index: 10;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-            transition: color 0.15s, background 0.15s, border-color 0.15s;
+            padding: 0;
+            flex-shrink: 0;
+            transition: color 0.15s;
         }
-        #config-toggle:hover { color: #a100ff; background: #f5efff; border-color: #d4b8ff; }
-        #config-toggle.active { color: #a100ff; background: #f5efff; border-color: #d4b8ff; }
+        #config-toggle:hover { color: #a100ff; }
+        #config-toggle.active { color: #a100ff; }
 
         /* ── CONFIG BAR ── */
         .config-bar {
