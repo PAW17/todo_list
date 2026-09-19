@@ -267,14 +267,24 @@
         .config-eye:hover { color: #a100ff; }
         .config-saved { font-size: 10px; font-weight: 700; color: #22c55e; letter-spacing: 0.08em; white-space: nowrap; display: none; }
 
+        /* ── WORKSPACE BODY (notes + AI, fills space between config & news) ── */
+        .workspace-body {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: hidden;
+        }
+
         /* ── NOTES AREA ── */
         .notes-wrapper {
-            height: 50vh;
+            flex: 1;
+            min-height: 0;
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.08);
             overflow: hidden;
-            flex-shrink: 0;
             display: flex;
             flex-direction: column;
         }
@@ -349,11 +359,11 @@
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-            max-height: 25vh;
+            height: 200px;
+            flex-shrink: 0;
             display: none;
             flex-direction: column;
             overflow: hidden;
-            flex-shrink: 0;
         }
         .ai-panel.visible { display: flex; }
         .ai-panel-header { display: flex; align-items: center; gap: 8px; padding: 9px 16px 8px; border-bottom: 1px solid #f0eafc; flex-shrink: 0; }
@@ -402,7 +412,6 @@
             gap: 12px;
             flex-shrink: 0;
             height: 160px;
-            margin-top: auto;
         }
         .news-tile {
             flex: 1;
@@ -615,6 +624,9 @@
         <span class="config-saved" id="config-saved">SAVED ✓</span>
     </div>
 
+    <!-- BODY: notes + AI panel (fills space between config-bar and news-bar) -->
+    <div class="workspace-body">
+
     <!-- NOTES -->
     <div class="notes-wrapper">
         <!-- FORMAT BAR -->
@@ -658,7 +670,9 @@
             <span onclick="hideAiPanel()" title="Fermer" style="margin-left:12px; cursor:pointer; color:#ccc; font-size:16px; line-height:1; display:flex; align-items:center;" onmouseover="this.style.color='#a100ff'" onmouseout="this.style.color='#ccc'">✕</span>
         </div>
         <div class="ai-content" id="ai-content"></div>
-    </div>
+    </div><!-- /.ai-panel -->
+
+    </div><!-- /.workspace-body -->
 
     <!-- NEWS BAR -->
     <div class="news-bar">
