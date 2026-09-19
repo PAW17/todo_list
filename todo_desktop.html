@@ -824,9 +824,22 @@
     'gemini-1.5-pro'
   ];
 
+  let _aiOnSelection = false;
+
   function triggerAi() {
-    const text = document.getElementById('notes-content').innerText;
-    if (!localStorage.getItem('gemini-api-key') || !text.trim()) return;
+    if (!localStorage.getItem('gemini-api-key')) return;
+    const el  = document.getElementById('notes-content');
+    const sel = window.getSelection();
+    let text;
+    // Priorité : texte sélectionné dans la zone notes
+    if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) {
+      text = sel.toString().trim();
+      _aiOnSelection = true;
+    } else {
+      text = el.innerText.trim();
+      _aiOnSelection = false;
+    }
+    if (!text) return;
     showAiLoading();
     callGemini(text);
   }
@@ -839,7 +852,11 @@
     document.getElementById('ai-content').textContent = t;
     // Update title to show which model was actually used
     const title = document.querySelector('.ai-panel-title');
-    if (title) title.textContent = model ? `AI · ${model}` : 'AI Suggestion';
+    if (title) {
+      let label = model ? `AI · ${model}` : 'AI Suggestion';
+      if (_aiOnSelection) label += ' · sélection';
+      title.textContent = label;
+    }
   }
   function showAiError(m)  { document.getElementById('ai-spinner').classList.remove('active'); document.getElementById('ai-content').textContent = '⚠ ' + m; }
 
