@@ -246,9 +246,29 @@
             overflow: hidden;
         }
 
+        /* ── CONFIG TOGGLE BUTTON ── */
+        #config-toggle {
+            position: absolute;
+            top: 24px;
+            right: 314px; /* left of the 280px calc widget */
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            border: 1px solid #e8e0f8;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            color: #bbb;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        #config-toggle:hover { color: #a100ff; background: #f5efff; border-color: #d4b8ff; }
+        #config-toggle.active { color: #a100ff; background: #f5efff; border-color: #d4b8ff; }
+
         /* ── CONFIG BAR ── */
         .config-bar {
-            display: flex;
+            display: none;
             align-items: center;
             gap: 20px;
             background: white;
@@ -266,6 +286,7 @@
         .config-eye { cursor: pointer; color: #bbb; display: flex; align-items: center; }
         .config-eye:hover { color: #a100ff; }
         .config-saved { font-size: 10px; font-weight: 700; color: #22c55e; letter-spacing: 0.08em; white-space: nowrap; display: none; }
+        .config-bar.visible { display: flex; }
 
         /* ── WORKSPACE BODY (notes + AI, fills space between config & news) ── */
         .workspace-body {
@@ -589,6 +610,9 @@
     <!-- SIDEBAR TOGGLE -->
     <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">‹</button>
 
+    <!-- CONFIG TOGGLE -->
+    <button id="config-toggle" onclick="toggleConfig()" title="Settings">⚙</button>
+
     <!-- CONFIG BAR -->
     <div class="config-bar">
         <div class="config-group">
@@ -770,6 +794,14 @@
   }
 
   // ── Sidebar toggle ───────────────────────────────────
+  function toggleConfig() {
+    const bar = document.querySelector('.config-bar');
+    const btn = document.getElementById('config-toggle');
+    const visible = bar.classList.toggle('visible');
+    btn.classList.toggle('active', visible);
+    localStorage.setItem('config-bar-visible', visible ? '1' : '0');
+  }
+
   function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const btn = document.getElementById('sidebar-toggle');
@@ -786,6 +818,11 @@
     if (savedModel) { const s = document.getElementById('model-select'); if ([...s.options].some(o => o.value === savedModel)) s.value = savedModel; }
     const savedWorker = localStorage.getItem('news-worker-url');
     if (savedWorker) document.getElementById('worker-url-input').value = savedWorker;
+    // Restore config bar visibility (hidden by default)
+    if (localStorage.getItem('config-bar-visible') === '1') {
+      document.querySelector('.config-bar').classList.add('visible');
+      document.getElementById('config-toggle').classList.add('active');
+    }
   })();
 
   function saveApiKey() {
