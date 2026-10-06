@@ -178,6 +178,28 @@
     }, 2000);
   };
 
+  // ── Iframe detection ──────────────────────────────
+  if (window.self !== window.top) {
+    document.querySelector('header').style.display    = 'none';
+    document.querySelector('.nav-todo').style.display = 'none';
+    document.body.style.background = 'transparent';
+  }
+
+  // ── Ctrl+Enter → déclenche l'IA dans le parent ────
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      const sel = window.getSelection();
+      const selectedText = (sel && !sel.isCollapsed && el.contains(sel.anchorNode))
+        ? sel.toString().trim() : '';
+      window.parent.postMessage({
+        type: 'trigger-ai',
+        selectedText,
+        text: el.innerText
+      }, '*');
+    }
+  });
+
   // ── Formatage ─────────────────────────────────────
   window.fmt = function(cmd) {
     document.execCommand(cmd, false, null);

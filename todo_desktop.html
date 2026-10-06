@@ -656,39 +656,9 @@
     <!-- BODY: notes + AI panel (fills space between config-bar and news-bar) -->
     <div class="workspace-body">
 
-    <!-- NOTES -->
+    <!-- NOTES (iframe) -->
     <div class="notes-wrapper">
-        <!-- FORMAT BAR -->
-        <div class="notes-format-bar">
-            <!-- Couleurs de texte -->
-            <button class="fmt-color" style="background:#1a1a1a"
-                    onclick="fmtColor('fore','#1a1a1a')" title="Noir"></button>
-            <button class="fmt-color" style="background:#a100ff"
-                    onclick="fmtColor('fore','#a100ff')" title="Violet"></button>
-            <button class="fmt-color" style="background:#ef4444"
-                    onclick="fmtColor('fore','#ef4444')" title="Rouge"></button>
-            <div class="fmt-sep"></div>
-            <!-- Surlignage -->
-            <button class="fmt-color" style="background:#fef08a; border-color:#d4c200"
-                    onclick="fmtColor('back','#fef08a')" title="Surligner en jaune"></button>
-            <div class="fmt-sep"></div>
-            <!-- Effacer -->
-            <button class="fmt-clear" onclick="fmtClear()" title="Effacer la mise en forme">✕</button>
-            <span class="fmt-hint">Sélectionne du texte puis clique une couleur</span>
-            <span id="notes-sync-dot" class="notes-sync-dot pending" title="Firebase sync">●</span>
-        </div>
-
-        <div class="notes-search-bar" id="notes-search-bar">
-            <input type="text" id="notes-search-input" class="notes-search-input" placeholder="Rechercher dans les notes…"
-                   oninput="searchNotes(this.value)"
-                   onkeydown="searchKeyNav(event)">
-            <span class="notes-search-counter" id="notes-search-counter"></span>
-            <button class="notes-search-nav" id="search-prev" onclick="searchNav(-1)" title="Précédent (↑)">↑</button>
-            <button class="notes-search-nav" id="search-next" onclick="searchNav(1)"  title="Suivant (↓)">↓</button>
-            <button class="notes-search-nav" onclick="closeSearch()" title="Fermer (Échap)" style="margin-left:2px; font-size:15px;"
-                    onmouseover="this.style.color='#a100ff'" onmouseout="this.style.color=''">✕</button>
-        </div>
-        <div id="notes-content" class="notes-content" contenteditable="true" oninput="scheduleNotesSave()"></div>
+        <iframe id="notes-frame" src="notes.html" style="width:100%;height:100%;border:none;display:block;border-radius:12px;"></iframe>
     </div>
 
     <!-- AI PANEL -->
@@ -871,20 +841,22 @@
 
   function triggerAi() {
     if (!localStorage.getItem('gemini-api-key')) return;
-    const el  = document.getElementById('notes-content');
-    const sel = window.getSelection();
-    let text;
-    // Priorité : texte sélectionné dans la zone notes
-    if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) {
-      text = sel.toString().trim();
-      _aiOnSelection = true;
-    } else {
-      text = el.innerText.trim();
-      _aiOnSelection = false;
-    }
-    if (!text) return;
-    showAiLoading();
-    callGemini(text);
+    try {
+      const frameWin = document.getElementById('notes-frame').contentWindow;
+      const frameEl  = frameWin.document.getElementById('notes-content');
+      const sel      = frameWin.getSelection();
+      let text;
+      if (sel && !sel.isCollapsed && frameEl.contains(sel.anchorNode)) {
+        text = sel.toString().trim();
+        _aiOnSelection = true;
+      } else {
+        text = frameEl.innerText.trim();
+        _aiOnSelection = false;
+      }
+      if (!text) return;
+      showAiLoading();
+      callGemini(text);
+    } catch(e) {}
   }
 
   function showAiPanel()  { document.getElementById('ai-panel').classList.add('visible'); }
@@ -977,19 +949,16 @@ ${text}`;
     showAiError(lastError || 'All models unavailable');
   }
 
-  // ── Notes persistence ────────────────────────────────
-  (function() {
-    const el = document.getElementById('notes-content');
-    const saved = localStorage.getItem('desktop-notes');
-    if (saved) el.innerHTML = saved;
-    el.addEventListener('input', () => {
-      localStorage.setItem('desktop-notes', el.innerHTML);
-    });
-    // Ctrl+Enter → déclenche l'IA
-    el.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); triggerAi(); }
-    });
-  })();
+  // ── AI trigger via postMessage from notes iframe ──────
+  window.addEventListener('message', (e) => {
+    if (e.data?.type !== 'trigger-ai') return;
+    const selectedText = e.data.selectedText?.trim();
+    const text = selectedText || e.data.text?.trim();
+    if (!text || !localStorage.getItem('gemini-api-key')) return;
+    _aiOnSelection = !!selectedText;
+    showAiLoading();
+    callGemini(text);
+  });
 
   // ── News feed (via Cloudflare Worker proxy → Google News RSS) ──
   const NEWS_TTL = 60 * 60 * 1000; // 1h cache
@@ -1103,145 +1072,10 @@ ${text}`;
   window.refreshNews = (_c, _id, btn, force) => loadAllNews(force, btn);
   loadAllNews();
 
-  // ── Notes search ──────────────────────────────────────────
-  let _searchMatches = [];
-  let _searchIdx     = 0;
-  let _searchHtml    = null; // saved innerHTML before highlight
-
-  function openSearch() {
-    const bar = document.getElementById('notes-search-bar');
-    bar.classList.add('visible');
-    const inp = document.getElementById('notes-search-input');
-    inp.focus();
-    inp.select();
-  }
-
-  function closeSearch() {
-    document.getElementById('notes-search-bar').classList.remove('visible');
-    const inp = document.getElementById('notes-search-input');
-    inp.value = '';
-    inp.classList.remove('no-match');
-    _clearHighlights();
-    document.getElementById('notes-search-counter').textContent = '';
-    _searchMatches = [];
-    _searchIdx = 0;
-    document.getElementById('notes-content').focus();
-  }
-
-  function _clearHighlights() {
-    if (_searchHtml !== null) {
-      document.getElementById('notes-content').innerHTML = _searchHtml;
-      _searchHtml = null;
-    }
-  }
-
-  function searchNotes(query) {
-    const el  = document.getElementById('notes-content');
-    const inp = document.getElementById('notes-search-input');
-    _clearHighlights();
-    _searchMatches = [];
-    _searchIdx = 0;
-    if (!query) {
-      document.getElementById('notes-search-counter').textContent = '';
-      inp.classList.remove('no-match');
-      _updateSearchNav();
-      return;
-    }
-    // Save HTML, then highlight text nodes
-    _searchHtml = el.innerHTML;
-    _searchMatches = _highlightText(el, query);
-    const count = _searchMatches.length;
-    inp.classList.toggle('no-match', count === 0);
-    if (count > 0) {
-      _searchIdx = 0;
-      _focusMatch(0);
-    }
-    document.getElementById('notes-search-counter').textContent = count ? `1 / ${count}` : '0';
-    _updateSearchNav();
-  }
-
-  function _highlightText(root, query) {
-    const regex  = new RegExp(escRx(query), 'gi');
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const nodes  = [];
-    let node;
-    while ((node = walker.nextNode())) nodes.push(node);
-    const marks = [];
-    for (const textNode of nodes) {
-      const text = textNode.textContent;
-      if (!regex.test(text)) { regex.lastIndex = 0; continue; }
-      regex.lastIndex = 0;
-      const frag = document.createDocumentFragment();
-      let last = 0, m;
-      while ((m = regex.exec(text)) !== null) {
-        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-        const mark = document.createElement('mark');
-        mark.className = 'sh';
-        mark.textContent = m[0];
-        frag.appendChild(mark);
-        marks.push(mark);
-        last = regex.lastIndex;
-      }
-      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-      textNode.parentNode.replaceChild(frag, textNode);
-    }
-    return marks;
-  }
-
-  function _focusMatch(idx) {
-    _searchMatches.forEach((m, i) => m.className = i === idx ? 'sh current' : 'sh');
-    _searchMatches[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    document.getElementById('notes-search-counter').textContent =
-      `${idx + 1} / ${_searchMatches.length}`;
-  }
-
-  function searchNav(dir) {
-    if (!_searchMatches.length) return;
-    _searchIdx = (_searchIdx + dir + _searchMatches.length) % _searchMatches.length;
-    _focusMatch(_searchIdx);
-  }
-
-  function searchKeyNav(e) {
-    if (e.key === 'Enter')  { e.preventDefault(); searchNav(e.shiftKey ? -1 : 1); }
-    if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
-  }
-
-  function _updateSearchNav() {
-    const on = _searchMatches.length > 0;
-    document.getElementById('search-prev').disabled = !on;
-    document.getElementById('search-next').disabled = !on;
-  }
-
-  function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-  // ── Notes colour palette ───────────────────────────────────
-  function fmtColor(type, color) {
-    const el  = document.getElementById('notes-content');
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    // Make sure the selection is inside the notes area
-    if (!el.contains(sel.anchorNode)) return;
-    el.focus();
-    document.execCommand('styleWithCSS', false, true);
-    if (type === 'fore') document.execCommand('foreColor',  false, color);
-    else                 document.execCommand('hiliteColor', false, color);
-  }
-
-  function fmtClear() {
-    const el  = document.getElementById('notes-content');
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    if (!el.contains(sel.anchorNode)) return;
-    el.focus();
-    document.execCommand('removeFormat', false, null);
-  }
-  // ──────────────────────────────────────────────────────────
-
-  // Ctrl+F → open search (intercept browser find)
+  // Ctrl+F → forward to notes iframe (browser find works natively inside iframe)
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key === 'f') {
-      e.preventDefault();
-      openSearch();
+      document.getElementById('notes-frame')?.contentWindow?.focus();
     }
   });
   // ──────────────────────────────────────────────────────────
@@ -1260,7 +1094,7 @@ ${text}`;
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
-  import { getDatabase, ref, push, onValue, remove, set, update, query, orderByChild, get } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+  import { getDatabase, ref, push, onValue, remove, update, query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
@@ -1275,32 +1109,6 @@ ${text}`;
   const app = initializeApp(firebaseConfig);
   const db  = getDatabase(app);
   const tasksRef  = ref(db, 'tasks');
-  const notesRef  = ref(db, 'notes');
-
-  // ── Notes Firebase sync ───────────────────────────────
-  let _notesSaveTimer = null;
-
-  get(notesRef).then(snap => {
-    const data = snap.val();
-    if (data?.html) document.getElementById('notes-content').innerHTML = data.html;
-    showNotesSyncDot('saved');
-  }).catch(() => showNotesSyncDot('error'));
-
-  window.scheduleNotesSave = function() {
-    clearTimeout(_notesSaveTimer);
-    showNotesSyncDot('pending');
-    _notesSaveTimer = setTimeout(() => {
-      const html = document.getElementById('notes-content').innerHTML;
-      set(notesRef, { html, updatedAt: Date.now() })
-        .then(() => showNotesSyncDot('saved'))
-        .catch(() => showNotesSyncDot('error'));
-    }, 2000);
-  };
-
-  function showNotesSyncDot(state) {
-    const dot = document.getElementById('notes-sync-dot');
-    if (dot) dot.className = 'notes-sync-dot ' + state;
-  }
   const taskList  = document.getElementById('taskList');
   const taskInput = document.getElementById('taskInput');
   let filterActive = false;
