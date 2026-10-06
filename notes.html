@@ -96,7 +96,7 @@
       -webkit-overflow-scrolling: touch;
     }
     .notes-area:empty::before {
-      content: "Commence à écrire…";
+      content: "Start typing…";
       color: #ccc;
       pointer-events: none;
     }
@@ -119,7 +119,7 @@
 
 <header>
   <h1>Notes</h1>
-  <span class="sync-badge pending" id="sync-badge">⏳ Chargement…</span>
+  <span class="sync-badge pending" id="sync-badge">⏳ Loading…</span>
 </header>
 
 <div class="format-bar">
@@ -168,9 +168,9 @@
   get(notesRef).then(snap => {
     const data = snap.val();
     if (data?.html) el.innerHTML = data.html;
-    setSyncBadge('saved', '✓ Synchronisé');
+    setSyncBadge('saved', '✓ Synced');
   }).catch(() => {
-    setSyncBadge('error', '✕ Hors ligne');
+    setSyncBadge('error', '✕ Offline');
   });
 
   // ── Auto-save avec debounce (2 s) ─────────────────
@@ -178,11 +178,11 @@
 
   window.scheduleNotesSave = function() {
     clearTimeout(_saveTimer);
-    setSyncBadge('pending', '⏳ Enregistrement…');
+    setSyncBadge('pending', '⏳ Saving…');
     _saveTimer = setTimeout(() => {
       set(notesRef, { html: el.innerHTML, updatedAt: Date.now() })
-        .then(() => setSyncBadge('saved', '✓ Synchronisé'))
-        .catch(() => setSyncBadge('error', '✕ Erreur réseau'));
+        .then(() => setSyncBadge('saved', '✓ Synced'))
+        .catch(() => setSyncBadge('error', '✕ Network error'));
     }, 2000);
   };
 
