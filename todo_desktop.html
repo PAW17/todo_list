@@ -346,6 +346,12 @@
         mark.sh { background: #fef08a; color: inherit; border-radius: 2px; }
         mark.sh.current { background: #a100ff; color: white; border-radius: 2px; }
 
+        /* ── NOTES SYNC DOT ── */
+        .notes-sync-dot { font-size: 9px; margin-left: auto; transition: color 0.4s; }
+        .notes-sync-dot.saved   { color: #22c55e; }
+        .notes-sync-dot.pending { color: #f59e0b; }
+        .notes-sync-dot.error   { color: #ef4444; }
+
         /* ── NOTES FORMAT BAR ── */
         .notes-format-bar {
             display: flex;
@@ -669,6 +675,7 @@
             <!-- Effacer -->
             <button class="fmt-clear" onclick="fmtClear()" title="Effacer la mise en forme">✕</button>
             <span class="fmt-hint">Sélectionne du texte puis clique une couleur</span>
+            <span id="notes-sync-dot" class="notes-sync-dot pending" title="Firebase sync">●</span>
         </div>
 
         <div class="notes-search-bar" id="notes-search-bar">
@@ -681,7 +688,7 @@
             <button class="notes-search-nav" onclick="closeSearch()" title="Fermer (Échap)" style="margin-left:2px; font-size:15px;"
                     onmouseover="this.style.color='#a100ff'" onmouseout="this.style.color=''">✕</button>
         </div>
-        <div id="notes-content" class="notes-content" contenteditable="true"></div>
+        <div id="notes-content" class="notes-content" contenteditable="true" oninput="scheduleNotesSave()"></div>
     </div>
 
     <!-- AI PANEL -->
@@ -1253,7 +1260,7 @@ ${text}`;
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
-  import { getDatabase, ref, push, onValue, remove, set, update, query, orderByChild } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+  import { getDatabase, ref, push, onValue, remove, set, update, query, orderByChild, get } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
@@ -1268,6 +1275,32 @@ ${text}`;
   const app = initializeApp(firebaseConfig);
   const db  = getDatabase(app);
   const tasksRef  = ref(db, 'tasks');
+  const notesRef  = ref(db, 'notes');
+
+  // ── Notes Firebase sync ───────────────────────────────
+  let _notesSaveTimer = null;
+
+  get(notesRef).then(snap => {
+    const data = snap.val();
+    if (data?.html) document.getElementById('notes-content').innerHTML = data.html;
+    showNotesSyncDot('saved');
+  }).catch(() => showNotesSyncDot('error'));
+
+  window.scheduleNotesSave = function() {
+    clearTimeout(_notesSaveTimer);
+    showNotesSyncDot('pending');
+    _notesSaveTimer = setTimeout(() => {
+      const html = document.getElementById('notes-content').innerHTML;
+      set(notesRef, { html, updatedAt: Date.now() })
+        .then(() => showNotesSyncDot('saved'))
+        .catch(() => showNotesSyncDot('error'));
+    }, 2000);
+  };
+
+  function showNotesSyncDot(state) {
+    const dot = document.getElementById('notes-sync-dot');
+    if (dot) dot.className = 'notes-sync-dot ' + state;
+  }
   const taskList  = document.getElementById('taskList');
   const taskInput = document.getElementById('taskInput');
   let filterActive = false;

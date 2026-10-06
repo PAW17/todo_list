@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Notes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f0ff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: white;
+      padding: 14px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 20px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.3px; }
+    .sync-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 20px;
+      transition: all 0.3s;
+    }
+    .sync-badge.saved   { color: #22c55e; background: #f0fdf4; }
+    .sync-badge.pending { color: #f59e0b; background: #fffbeb; }
+    .sync-badge.error   { color: #ef4444; background: #fef2f2; }
+
+    /* ── FORMAT BAR ── */
+    .format-bar {
+      background: white;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid #f0e8ff;
+      flex-shrink: 0;
+    }
+    .fmt-btn {
+      min-width: 34px; height: 34px;
+      border: 1px solid #e8e0f8;
+      background: #f8f5ff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #4a4a4a;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fmt-btn:active { background: #e8d0ff; border-color: #c8a0f0; }
+    .fmt-sep { width: 1px; height: 22px; background: #e8e0f8; margin: 0 2px; }
+    .fmt-circle {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(255,255,255,0.6);
+      outline: 1.5px solid rgba(0,0,0,0.12);
+      cursor: pointer;
+    }
+    .fmt-clear {
+      font-size: 13px; color: #bbb;
+      border: none; background: transparent;
+      cursor: pointer; padding: 4px;
+    }
+    .fmt-clear:active { color: #a100ff; }
+
+    /* ── NOTES AREA ── */
+    .notes-area {
+      flex: 1;
+      overflow-y: auto;
+      background: white;
+      margin: 12px;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      outline: none;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #1a1a1a;
+      -webkit-overflow-scrolling: touch;
+    }
+    .notes-area:empty::before {
+      content: "Commence à écrire…";
+      color: #ccc;
+      pointer-events: none;
+    }
+
+    /* ── NAV LINK ── */
+    .nav-todo {
+      position: fixed;
+      bottom: 20px; right: 16px;
+      background: #a100ff;
+      color: white;
+      text-decoration: none;
+      padding: 10px 18px;
+      border-radius: 50px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 18px rgba(161,0,255,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Notes</h1>
+  <span class="sync-badge pending" id="sync-badge">⏳ Chargement…</span>
+</header>
+
+<div class="format-bar">
+  <button class="fmt-btn" onclick="fmt('bold')"      title="Gras"><b>B</b></button>
+  <button class="fmt-btn" onclick="fmt('italic')"    title="Italique"><i>I</i></button>
+  <button class="fmt-btn" onclick="fmt('underline')" title="Souligné"><u>U</u></button>
+  <div class="fmt-sep"></div>
+  <button class="fmt-circle" style="background:#1a1a1a" onclick="fmtColor('fore','#1a1a1a')" title="Noir"></button>
+  <button class="fmt-circle" style="background:#a100ff" onclick="fmtColor('fore','#a100ff')" title="Violet"></button>
+  <button class="fmt-circle" style="background:#ef4444" onclick="fmtColor('fore','#ef4444')" title="Rouge"></button>
+  <button class="fmt-circle" style="background:#fef08a;outline-color:#d4c200" onclick="fmtColor('back','#fef08a')" title="Surligner jaune"></button>
+  <div class="fmt-sep"></div>
+  <button class="fmt-clear" onclick="fmtClear()" title="Effacer la mise en forme">✕</button>
+</div>
+
+<div id="notes-content" class="notes-area" contenteditable="true" oninput="scheduleNotesSave()"></div>
+
+<a class="nav-todo" href="index.html">☑ TODO</a>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, get, set } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
+    authDomain: "todolist-93c54.firebaseapp.com",
+    databaseURL: "https://todolist-93c54-default-rtdb.firebaseio.com",
+    projectId: "todolist-93c54",
+    storageBucket: "todolist-93c54.firebasestorage.app",
+    messagingSenderId: "944174392488",
+    appId: "1:944174392488:web:0dc9a1fb2fb8733f31e69d"
+  };
+
+  const app      = initializeApp(firebaseConfig);
+  const db       = getDatabase(app);
+  const notesRef = ref(db, 'notes');
+  const el       = document.getElementById('notes-content');
+  const badge    = document.getElementById('sync-badge');
+
+  function setSyncBadge(state, label) {
+    badge.textContent = label;
+    badge.className   = 'sync-badge ' + state;
+  }
+
+  // ── Chargement initial ─────────────────────────────
+  get(notesRef).then(snap => {
+    const data = snap.val();
+    if (data?.html) el.innerHTML = data.html;
+    setSyncBadge('saved', '✓ Synchronisé');
+  }).catch(() => {
+    setSyncBadge('error', '✕ Hors ligne');
+  });
+
+  // ── Auto-save avec debounce (2 s) ─────────────────
+  let _saveTimer = null;
+
+  window.scheduleNotesSave = function() {
+    clearTimeout(_saveTimer);
+    setSyncBadge('pending', '⏳ Enregistrement…');
+    _saveTimer = setTimeout(() => {
+      set(notesRef, { html: el.innerHTML, updatedAt: Date.now() })
+        .then(() => setSyncBadge('saved', '✓ Synchronisé'))
+        .catch(() => setSyncBadge('error', '✕ Erreur réseau'));
+    }, 2000);
+  };
+
+  // ── Formatage ─────────────────────────────────────
+  window.fmt = function(cmd) {
+    document.execCommand(cmd, false, null);
+    el.focus();
+  };
+  window.fmtColor = function(type, color) {
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand(type === 'fore' ? 'foreColor' : 'hiliteColor', false, color);
+    el.focus();
+  };
+  window.fmtClear = function() {
+    document.execCommand('removeFormat', false, null);
+    el.focus();
+  };
+</script>
+
+</body>
+</html>
