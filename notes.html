@@ -294,6 +294,7 @@
     if (e.target.classList.contains('chk')) {
       const checked = e.target.textContent === '☑';
       e.target.textContent = checked ? '☐' : '☑';
+      e.target.style.color  = checked ? '' : '#22c55e';
       const item = e.target.closest('.action-item');
       if (!item) { scheduleNotesSave(); return; }
 
