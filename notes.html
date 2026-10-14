@@ -425,7 +425,14 @@
     el.focus();
   };
   window.fmtClear = function() {
-    document.execCommand('removeFormat', false, null);
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const text  = range.toString();
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    sel.removeAllRanges();
+    scheduleNotesSave();
     el.focus();
   };
 </script>
