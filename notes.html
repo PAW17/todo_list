@@ -427,13 +427,10 @@
   window.fmtClear = function() {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-    const text  = range.toString();
-    range.deleteContents();
-    range.insertNode(document.createTextNode(text));
-    sel.removeAllRanges();
-    scheduleNotesSave();
+    document.execCommand('styleWithCSS', false, false); // reset sticky state before removeFormat
+    document.execCommand('removeFormat', false, null);
     el.focus();
+    scheduleNotesSave();
   };
 </script>
 
