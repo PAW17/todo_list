@@ -291,37 +291,36 @@
   };
 
   el.addEventListener('click', e => {
-    if (e.target.classList.contains('chk')) {
-      const checked = e.target.textContent === '☑';
-      e.target.textContent = checked ? '☐' : '☑';
-      e.target.style.color  = checked ? '' : '#22c55e';
-      const item = e.target.closest('.action-item');
-      if (!item) { scheduleNotesSave(); return; }
+    if (!e.target.classList.contains('chk')) return;
+    const checked = e.target.textContent === '☑';
+    e.target.textContent   = checked ? '☐' : '☑';
+    e.target.style.color   = checked ? '' : '#22c55e';
+    e.target.style.display = checked ? '' : 'inline-block';
 
-      if (!checked) {
-        // ✅ Checking: wrap following nodes in <s>
-        item.classList.add('done');
-        const s = document.createElement('s');
-        s.className = 'action-done-text';
-        s.style.color = '#bbb';
-        let node = e.target.nextSibling;
-        while (node) {
-          const next = node.nextSibling;
-          s.appendChild(node);
-          node = next;
-        }
-        item.appendChild(s);
-      } else {
-        // ☐ Unchecking: unwrap <s>
-        item.classList.remove('done');
-        const s = item.querySelector('.action-done-text');
-        if (s) {
-          while (s.firstChild) item.insertBefore(s.firstChild, s);
-          s.remove();
-        }
+    // Works with or without .action-item wrapper
+    const parent = e.target.closest('.action-item') || e.target.parentElement;
+
+    if (!checked) {
+      // Strike through following siblings
+      const s = document.createElement('s');
+      s.className  = 'action-done-text';
+      s.style.color = '#bbb';
+      let node = e.target.nextSibling;
+      while (node) {
+        const next = node.nextSibling;
+        s.appendChild(node);
+        node = next;
       }
-      scheduleNotesSave();
+      if (s.childNodes.length) parent.appendChild(s);
+    } else {
+      // Restore following siblings
+      const s = parent.querySelector('.action-done-text');
+      if (s) {
+        while (s.firstChild) parent.insertBefore(s.firstChild, s);
+        s.remove();
+      }
     }
+    scheduleNotesSave();
   });
 
   // ── Image resize ──────────────────────────────────
