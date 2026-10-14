@@ -58,6 +58,19 @@
     }
     .fmt-btn:active { background: #e8d0ff; border-color: #c8a0f0; }
     .fmt-sep { width: 1px; height: 16px; background: #e8e0f8; margin: 0 2px; }
+    .fmt-size {
+      height: 26px;
+      border: 1px solid #e8e0f8;
+      background: #f8f5ff;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #4a4a4a;
+      padding: 0 4px;
+      cursor: pointer;
+      outline: none;
+      max-width: 46px;
+      font-family: inherit;
+    }
     .fmt-circle {
       width: 20px; height: 20px;
       border-radius: 50%;
@@ -123,9 +136,18 @@
 </header>
 
 <div class="format-bar">
-  <button class="fmt-btn" onclick="fmt('bold')"      title="Gras"><b>B</b></button>
-  <button class="fmt-btn" onclick="fmt('italic')"    title="Italique"><i>I</i></button>
-  <button class="fmt-btn" onclick="fmt('underline')" title="Souligné"><u>U</u></button>
+  <button class="fmt-btn" onclick="fmt('bold')"      title="Bold"><b>B</b></button>
+  <button class="fmt-btn" onclick="fmt('italic')"    title="Italic"><i>I</i></button>
+  <button class="fmt-btn" onclick="fmt('underline')" title="Underline"><u>U</u></button>
+  <div class="fmt-sep"></div>
+  <select class="fmt-size" onchange="fmtSize(this.value); this.value=''" title="Font size">
+    <option value="" disabled selected>Aa</option>
+    <option value="1">XS</option>
+    <option value="2">S</option>
+    <option value="3">M</option>
+    <option value="5">L</option>
+    <option value="7">XL</option>
+  </select>
   <div class="fmt-sep"></div>
   <button class="fmt-circle" style="background:#1a1a1a" onclick="fmtColor('fore','#1a1a1a')" title="Noir"></button>
   <button class="fmt-circle" style="background:#a100ff" onclick="fmtColor('fore','#a100ff')" title="Violet"></button>
@@ -216,6 +238,12 @@
   window.fmtColor = function(type, color) {
     document.execCommand('styleWithCSS', false, true);
     document.execCommand(type === 'fore' ? 'foreColor' : 'hiliteColor', false, color);
+    el.focus();
+  };
+  window.fmtSize = function(size) {
+    if (!size) return;
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('fontSize', false, size);
     el.focus();
   };
   window.fmtClear = function() {
