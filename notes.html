@@ -148,7 +148,15 @@
       color: #aaa;
       font-size: 1em;
     }
-    .chk.done { color: #22c55e; }
+    .action-item.done {
+      text-decoration: line-through;
+      color: #bbb;
+    }
+    .action-item.done .chk {
+      display: inline-block; /* breaks strikethrough line on the checkbox */
+      text-decoration: none;
+      color: #22c55e;
+    }
 
     /* ── NAV LINK ── */
     .nav-todo {
@@ -263,18 +271,22 @@
     if (!sel.rangeCount) return;
     const range = sel.getRangeAt(0);
     range.deleteContents();
-    const span = document.createElement('span');
-    span.className = 'chk';
-    span.textContent = '☐';
+
+    const div = document.createElement('div');
+    div.className = 'action-item';
+    const chk = document.createElement('span');
+    chk.className = 'chk';
+    chk.textContent = '☐';
     const space = document.createTextNode(' ');
-    const frag = document.createDocumentFragment();
-    frag.appendChild(span);
-    frag.appendChild(space);
-    range.insertNode(frag);
-    range.setStartAfter(space);
-    range.collapse(true);
+    div.appendChild(chk);
+    div.appendChild(space);
+    range.insertNode(div);
+
+    const r = document.createRange();
+    r.setStartAfter(space);
+    r.collapse(true);
     sel.removeAllRanges();
-    sel.addRange(range);
+    sel.addRange(r);
     scheduleNotesSave();
   };
 
@@ -282,7 +294,8 @@
     if (e.target.classList.contains('chk')) {
       const checked = e.target.textContent === '☑';
       e.target.textContent = checked ? '☐' : '☑';
-      e.target.classList.toggle('done', !checked);
+      const item = e.target.closest('.action-item');
+      if (item) item.classList.toggle('done', !checked);
       scheduleNotesSave();
     }
   });
