@@ -141,6 +141,15 @@
       pointer-events: none;
     }
 
+    /* ── CHECKBOX ITEMS ── */
+    .chk {
+      cursor: pointer;
+      user-select: none;
+      color: #aaa;
+      font-size: 1em;
+    }
+    .chk.done { color: #22c55e; }
+
     /* ── NAV LINK ── */
     .nav-todo {
       position: fixed;
@@ -181,7 +190,9 @@
   <button class="fmt-circle" style="background:#ef4444" onclick="fmtColor('fore','#ef4444')" title="Rouge"></button>
   <button class="fmt-circle" style="background:#fef08a;outline-color:#d4c200" onclick="fmtColor('back','#fef08a')" title="Surligner jaune"></button>
   <div class="fmt-sep"></div>
-  <button class="fmt-clear" onclick="fmtClear()" title="Effacer la mise en forme">✕</button>
+  <button class="fmt-clear" onclick="fmtClear()" title="Clear formatting">✕</button>
+  <div class="fmt-sep"></div>
+  <button class="fmt-btn" onclick="insertCheckbox()" title="Action item (Ctrl+Shift+A)">☐</button>
 </div>
 
 <div id="notes-content" class="notes-area" contenteditable="true" oninput="scheduleNotesSave()"></div>
@@ -245,6 +256,37 @@
     }, 2000);
   };
 
+  // ── Checkbox / action items ───────────────────────
+  window.insertCheckbox = function() {
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const span = document.createElement('span');
+    span.className = 'chk';
+    span.textContent = '☐';
+    const space = document.createTextNode(' ');
+    const frag = document.createDocumentFragment();
+    frag.appendChild(span);
+    frag.appendChild(space);
+    range.insertNode(frag);
+    range.setStartAfter(space);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    scheduleNotesSave();
+  };
+
+  el.addEventListener('click', e => {
+    if (e.target.classList.contains('chk')) {
+      const checked = e.target.textContent === '☑';
+      e.target.textContent = checked ? '☐' : '☑';
+      e.target.classList.toggle('done', !checked);
+      scheduleNotesSave();
+    }
+  });
+
   // ── Image resize ──────────────────────────────────
   let _selImg = null;
   const imgTb = document.getElementById('img-toolbar');
@@ -305,6 +347,10 @@
         selectedText,
         text: el.innerText
       }, '*');
+    }
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      e.preventDefault();
+      insertCheckbox();
     }
   });
 
