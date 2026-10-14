@@ -396,9 +396,27 @@
     el.focus();
   };
   window.fmtColor = function(type, color) {
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand(type === 'fore' ? 'foreColor' : 'hiliteColor', false, color);
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     el.focus();
+    if (type === 'fore') {
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand('foreColor', false, color);
+    } else {
+      // Manual wrap to avoid applying background to the whole block element
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.backgroundColor = color;
+      try {
+        range.surroundContents(span);
+      } catch {
+        // Fallback if selection crosses element boundaries
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('hiliteColor', false, color);
+      }
+      sel.removeAllRanges();
+      scheduleNotesSave();
+    }
   };
   window.fmtSize = function(size) {
     if (!size) return;
