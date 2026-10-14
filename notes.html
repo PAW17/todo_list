@@ -93,6 +93,33 @@
     }
     .fmt-clear:active { background: #d4b8ff; color: #a100ff; }
 
+    /* ── IMAGE RESIZE ── */
+    .img-selected { outline: 2px solid #a100ff; border-radius: 2px; cursor: pointer; }
+    .img-toolbar {
+      position: fixed;
+      background: white;
+      border: 1px solid #e8e0f8;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      padding: 4px 8px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+      z-index: 1000;
+    }
+    .img-toolbar span { font-size: 10px; color: #bbb; margin-right: 2px; }
+    .img-toolbar button {
+      padding: 3px 7px;
+      border: 1px solid #e8e0f8;
+      background: #f8f5ff;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #4a4a4a;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .img-toolbar button:hover { background: #e8d0ff; border-color: #c8a0f0; }
+
     /* ── NOTES AREA ── */
     .notes-area {
       flex: 1;
@@ -159,6 +186,16 @@
 
 <div id="notes-content" class="notes-area" contenteditable="true" oninput="scheduleNotesSave()"></div>
 
+<!-- Image resize toolbar -->
+<div class="img-toolbar" id="img-toolbar">
+  <span>Size:</span>
+  <button onclick="resizeImg(25)">25%</button>
+  <button onclick="resizeImg(50)">50%</button>
+  <button onclick="resizeImg(75)">75%</button>
+  <button onclick="resizeImg(100)">100%</button>
+  <button onclick="resizeImg(null)" title="Original">↺</button>
+</div>
+
 <a class="nav-todo" href="index.html">☑ TODO</a>
 
 <script type="module">
@@ -207,6 +244,47 @@
         .catch(() => setSyncBadge('error', '✕ Network error'));
     }, 2000);
   };
+
+  // ── Image resize ──────────────────────────────────
+  let _selImg = null;
+  const imgTb = document.getElementById('img-toolbar');
+
+  function positionImgToolbar(img) {
+    const r = img.getBoundingClientRect();
+    imgTb.style.left = Math.max(4, r.left) + 'px';
+    imgTb.style.top  = Math.max(4, r.top - 44) + 'px';
+    imgTb.style.display = 'flex';
+  }
+
+  function selectImg(img) {
+    if (_selImg) _selImg.classList.remove('img-selected');
+    _selImg = img;
+    img.classList.add('img-selected');
+    positionImgToolbar(img);
+  }
+
+  function deselectImg() {
+    if (_selImg) _selImg.classList.remove('img-selected');
+    _selImg = null;
+    imgTb.style.display = 'none';
+  }
+
+  window.resizeImg = function(pct) {
+    if (!_selImg) return;
+    if (pct === null) { _selImg.style.width = ''; _selImg.style.height = ''; }
+    else              { _selImg.style.width = pct + '%'; _selImg.style.height = 'auto'; }
+    positionImgToolbar(_selImg);
+    scheduleNotesSave();
+  };
+
+  el.addEventListener('click', e => {
+    if (e.target.tagName === 'IMG') selectImg(e.target);
+    else deselectImg();
+  });
+  imgTb.addEventListener('mousedown', e => e.stopPropagation());
+  document.addEventListener('click', e => {
+    if (!imgTb.contains(e.target) && e.target.tagName !== 'IMG') deselectImg();
+  });
 
   // ── Iframe detection ──────────────────────────────
   if (window.self !== window.top) {
