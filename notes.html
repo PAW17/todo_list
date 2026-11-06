@@ -158,6 +158,76 @@
       color: #22c55e;
     }
 
+    /* ── TABS ── */
+    .tabs-area {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 1;
+      min-width: 0;
+    }
+    .tabs-area::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px 2px 10px;
+      border: 1px solid #e8e0f8;
+      background: #f8f5ff;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 11px;
+      color: #888;
+      white-space: nowrap;
+      user-select: none;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .tab-btn:hover { background: #ede8f8; }
+    .tab-btn.active {
+      background: #a100ff;
+      color: white;
+      border-color: #a100ff;
+    }
+    .tab-btn.active:hover { background: #8c00dd; }
+    .tab-close {
+      font-size: 12px;
+      color: #ccc;
+      cursor: pointer;
+      line-height: 1;
+      margin-left: 1px;
+      flex-shrink: 0;
+    }
+    .tab-btn.active .tab-close { color: rgba(255,255,255,0.6); }
+    .tab-close:hover { color: #ef4444 !important; }
+    .tab-add {
+      width: 20px; height: 20px;
+      border: 1px solid #e8e0f8;
+      background: #f8f5ff;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      color: #bbb;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0;
+      flex-shrink: 0;
+      line-height: 1;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-add:hover { color: #a100ff; border-color: #d4b8ff; }
+    .tab-rename-input {
+      border: none; outline: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      width: 60px;
+      min-width: 20px;
+    }
+
     /* ── NAV LINK ── */
     .nav-todo {
       position: fixed;
@@ -201,6 +271,9 @@
   <button class="fmt-clear" onclick="fmtClear()" title="Clear formatting">✕</button>
   <div class="fmt-sep"></div>
   <button class="fmt-btn" onclick="insertCheckbox()" title="Action item (Ctrl+Shift+A)">☐</button>
+  <div class="tabs-area" id="tabs-area">
+    <button class="tab-add" onclick="addTab()" title="New page">+</button>
+  </div>
 </div>
 
 <div id="notes-content" class="notes-area" contenteditable="true" oninput="scheduleNotesSave()"></div>
@@ -219,7 +292,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-app.js";
-  import { getDatabase, ref, get, set } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
+  import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com.rproxy.goskope.com/firebasejs/10.7.1/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB1XfH0aY3CnUDAjA7Ll3VaFSYjqk0gcxo",
@@ -242,27 +315,151 @@
     badge.className   = 'sync-badge ' + state;
   }
 
-  // ── Chargement initial ─────────────────────────────
-  get(notesRef).then(snap => {
-    const data = snap.val();
-    if (data?.html) el.innerHTML = data.html;
-    setSyncBadge('saved', '✓ Synced');
-  }).catch(() => {
-    setSyncBadge('error', '✕ Offline');
-  });
-
-  // ── Auto-save avec debounce (2 s) ─────────────────
+  // ── Tabs state ─────────────────────────────────────
+  let _tabs = {};
+  let _activeTab = '';
   let _saveTimer = null;
+
+  function genTabId() {
+    return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  }
+
+  function renderTabs() {
+    const area = document.getElementById('tabs-area');
+    area.querySelectorAll('.tab-btn').forEach(b => b.remove());
+    const addBtn = area.querySelector('.tab-add');
+    const sorted = Object.entries(_tabs).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+    const hasMany = sorted.length > 1;
+    for (const [id, tab] of sorted) {
+      const btn = document.createElement('div');
+      btn.className = 'tab-btn' + (id === _activeTab ? ' active' : '');
+      btn.dataset.id = id;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'tab-name';
+      nameSpan.textContent = tab.title || 'Page';
+      btn.appendChild(nameSpan);
+      if (hasMany) {
+        const closeEl = document.createElement('span');
+        closeEl.className = 'tab-close';
+        closeEl.textContent = '×';
+        closeEl.addEventListener('click', (e) => { e.stopPropagation(); deleteTab(id); });
+        btn.appendChild(closeEl);
+      }
+      btn.addEventListener('click', () => switchTab(id));
+      btn.addEventListener('dblclick', (e) => { e.preventDefault(); startRename(id, nameSpan); });
+      area.insertBefore(btn, addBtn);
+    }
+  }
+
+  function startRename(id, nameSpan) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = _tabs[id]?.title || '';
+    input.className = 'tab-rename-input';
+    nameSpan.replaceWith(input);
+    input.focus(); input.select();
+    const save = () => {
+      const newTitle = input.value.trim() || 'Page';
+      if (_tabs[id]) _tabs[id].title = newTitle;
+      set(ref(db, 'notes/tabs/' + id + '/title'), newTitle).catch(() => {});
+      input.replaceWith(nameSpan);
+      nameSpan.textContent = newTitle;
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      if (e.key === 'Escape') { input.replaceWith(nameSpan); }
+    });
+  }
+
+  async function switchTab(id) {
+    if (id === _activeTab) return;
+    await flushSave();
+    _activeTab = id;
+    el.innerHTML = _tabs[id]?.html || '';
+    set(ref(db, 'notes/activeTab'), id).catch(() => {});
+    renderTabs();
+  }
+
+  window.addTab = async function() {
+    await flushSave();
+    const id = genTabId();
+    const order = Object.keys(_tabs).length;
+    _tabs[id] = { title: 'Page ' + (order + 1), html: '', order, updatedAt: Date.now() };
+    _activeTab = id;
+    el.innerHTML = '';
+    set(ref(db, 'notes/tabs/' + id), _tabs[id]).catch(() => {});
+    set(ref(db, 'notes/activeTab'), id).catch(() => {});
+    renderTabs();
+    el.focus();
+  };
+
+  window.deleteTab = async function(id) {
+    if (Object.keys(_tabs).length <= 1) return;
+    if (id === _activeTab) {
+      const others = Object.keys(_tabs).filter(k => k !== id);
+      _activeTab = others[0];
+      el.innerHTML = _tabs[_activeTab]?.html || '';
+    }
+    delete _tabs[id];
+    remove(ref(db, 'notes/tabs/' + id)).catch(() => {});
+    set(ref(db, 'notes/activeTab'), _activeTab).catch(() => {});
+    renderTabs();
+  };
+
+  function flushSave() {
+    clearTimeout(_saveTimer);
+    _saveTimer = null;
+    if (!_activeTab || !_tabs[_activeTab]) return Promise.resolve();
+    _tabs[_activeTab].html = el.innerHTML;
+    _tabs[_activeTab].updatedAt = Date.now();
+    return set(ref(db, 'notes/tabs/' + _activeTab), _tabs[_activeTab]).catch(() => {});
+  }
 
   window.scheduleNotesSave = function() {
     clearTimeout(_saveTimer);
     setSyncBadge('pending', '⏳ Saving…');
     _saveTimer = setTimeout(() => {
-      set(notesRef, { html: el.innerHTML, updatedAt: Date.now() })
+      if (!_activeTab || !_tabs[_activeTab]) return;
+      _tabs[_activeTab].html = el.innerHTML;
+      _tabs[_activeTab].updatedAt = Date.now();
+      set(ref(db, 'notes/tabs/' + _activeTab), _tabs[_activeTab])
         .then(() => setSyncBadge('saved', '✓ Synced'))
         .catch(() => setSyncBadge('error', '✕ Network error'));
     }, 2000);
   };
+
+  // ── Chargement initial ─────────────────────────────
+  get(notesRef).then(snap => {
+    const data = snap.val();
+    if (data?.tabs && Object.keys(data.tabs).length > 0) {
+      _tabs = data.tabs;
+      _activeTab = (data.activeTab && _tabs[data.activeTab])
+        ? data.activeTab : Object.keys(_tabs)[0];
+    } else if (data?.html) {
+      // Migrate old single-page format → first tab
+      const id = genTabId();
+      _tabs = { [id]: { title: 'Page 1', html: data.html, order: 0, updatedAt: Date.now() } };
+      _activeTab = id;
+      set(notesRef, { tabs: _tabs, activeTab: id }).catch(() => {});
+    } else {
+      const id = genTabId();
+      _tabs = { [id]: { title: 'Page 1', html: '', order: 0, updatedAt: Date.now() } };
+      _activeTab = id;
+      set(notesRef, { tabs: _tabs, activeTab: id }).catch(() => {});
+    }
+    el.innerHTML = _tabs[_activeTab]?.html || '';
+    renderTabs();
+    setSyncBadge('saved', '✓ Synced');
+  }).catch(() => {
+    if (Object.keys(_tabs).length === 0) {
+      const id = genTabId();
+      _tabs = { [id]: { title: 'Page 1', html: '', order: 0 } };
+      _activeTab = id;
+      renderTabs();
+    }
+    setSyncBadge('error', '✕ Offline');
+  });
 
   // ── Checkbox / action items ───────────────────────
   window.insertCheckbox = function() {
