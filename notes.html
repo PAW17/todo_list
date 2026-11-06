@@ -396,6 +396,12 @@
 
   window.deleteTab = async function(id) {
     if (Object.keys(_tabs).length <= 1) return;
+    const tab = _tabs[id];
+    const hasContent = tab?.html && tab.html.replace(/<[^>]*>/g, '').trim().length > 0;
+    if (hasContent) {
+      const title = tab.title || 'Page';
+      if (!confirm(`Delete "${title}"? This page has content and cannot be recovered.`)) return;
+    }
     if (id === _activeTab) {
       const others = Object.keys(_tabs).filter(k => k !== id);
       _activeTab = others[0];
