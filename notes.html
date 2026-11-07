@@ -189,6 +189,8 @@
       transition: background 0.15s;
     }
     .tab-btn:hover { background: #ede8f8; }
+    .tab-btn[draggable="true"] { cursor: grab; }
+    .tab-btn[draggable="true"]:active { cursor: grabbing; }
     .tab-btn.active {
       background: #a100ff;
       color: white;
@@ -321,6 +323,7 @@
   let _tabs = {};
   let _activeTab = '';
   let _saveTimer = null;
+  let _dragId = null;
 
   function genTabId() {
     return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -347,8 +350,59 @@
         closeEl.addEventListener('click', (e) => { e.stopPropagation(); deleteTab(id); });
         btn.appendChild(closeEl);
       }
-      btn.addEventListener('click', () => switchTab(id));
-      btn.addEventListener('dblclick', (e) => { e.preventDefault(); startRename(id, nameSpan); });
+      // ── drag & drop reorder ──
+      btn.setAttribute('draggable', 'true');
+      btn.addEventListener('dragstart', (e) => {
+        _dragId = id;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        setTimeout(() => { btn.style.opacity = '0.35'; btn.style.transform = 'scale(0.95)'; }, 0);
+      });
+      btn.addEventListener('dragend', () => {
+        btn.style.opacity = '';
+        btn.style.transform = '';
+        _dragId = null;
+      });
+      btn.addEventListener('dragover', (e) => {
+        if (!_dragId || _dragId === id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      btn.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!_dragId || _dragId === id) return;
+        const area2 = document.getElementById('tabs-area');
+        const dragBtn = area2.querySelector('[data-id="' + _dragId + '"]');
+        if (!dragBtn) return;
+        const rect = btn.getBoundingClientRect();
+        if (e.clientX < rect.left + rect.width / 2) {
+          area2.insertBefore(dragBtn, btn);
+        } else {
+          btn.insertAdjacentElement('afterend', dragBtn);
+        }
+        [...area2.querySelectorAll('.tab-btn')].forEach((b, i) => {
+          const tid = b.dataset.id;
+          if (_tabs[tid]) {
+            _tabs[tid].order = i;
+            set(ref(db, 'notes/tabs/' + tid + '/order'), i).catch(() => {});
+          }
+        });
+        renderTabs();
+      });
+      // ── click / dblclick ──
+      let _clickTimer = null;
+      btn.addEventListener('click', () => {
+        // ignore click if it was a drag
+        if (!_dragId) {
+          clearTimeout(_clickTimer);
+          _clickTimer = setTimeout(() => switchTab(id), 200);
+        }
+      });
+      btn.addEventListener('dblclick', (e) => {
+        clearTimeout(_clickTimer);
+        e.preventDefault();
+        startRename(id, nameSpan);
+      });
       area.insertBefore(btn, addBtn);
     }
   }
