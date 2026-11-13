@@ -955,25 +955,31 @@
 
   function askNotes() {
     const q = document.getElementById('ai-question-input').value.trim();
-    if (!q || !localStorage.getItem('gemini-api-key')) return;
+    if (!q) return;
+    if (!localStorage.getItem('gemini-api-key')) {
+      showAiPanel();
+      showAiError('Please configure your Gemini API key in Settings (⚙)');
+      return;
+    }
+
+    // Read notes from iframe — graceful fallback if empty
+    let notesText = '';
     try {
-      const frameWin  = document.getElementById('notes-frame').contentWindow;
-      const frameEl   = frameWin.document.getElementById('notes-content');
-      const notesText = frameEl.innerText.trim();
-      if (!notesText) return;
-      _aiOnSelection = false;
-      showAiLoading();
-      document.getElementById('ai-panel-title').textContent = 'Notes Q&A';
-      const prompt = `You are an assistant with access to the user's personal notes. Answer the question below based strictly on the note content. Be concise and direct. If the answer is not in the notes, say so clearly. Use the same language as the question.
-
-Notes:
----
-${notesText}
----
-
-Question: ${q}`;
-      callGemini(prompt);
+      const frameWin = document.getElementById('notes-frame').contentWindow;
+      const frameEl  = frameWin.document.getElementById('notes-content');
+      if (frameEl) notesText = (frameEl.innerText || '').trim();
     } catch(e) {}
+
+    const contextBlock = notesText
+      ? `Notes:\n---\n${notesText}\n---\n\n`
+      : '(No notes content available)\n\n';
+
+    const prompt = `You are an assistant with access to the user's personal notes. Answer the question below based on the note content. Be concise and direct. If the answer is not in the notes, say so clearly. Use the same language as the question.\n\n${contextBlock}Question: ${q}`;
+
+    _aiOnSelection = false;
+    showAiLoading();
+    document.getElementById('ai-panel-title').textContent = 'Notes Q&A';
+    callGemini(prompt);
   }
 
   function showAiPanel()  { document.getElementById('ai-panel').classList.add('visible'); }
