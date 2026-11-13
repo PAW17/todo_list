@@ -244,7 +244,9 @@
             gap: 12px;
             box-sizing: border-box;
             overflow: hidden;
+            transition: padding-right 0.3s ease;
         }
+        .workspace.right-collapsed { padding-right: 24px; }
 
         /* ── CONFIG TOGGLE BUTTON ── */
         #config-toggle {
@@ -515,6 +517,31 @@
             --danger: #D0021B;
         }
 
+        /* ── RIGHT PANEL TOGGLE ── */
+        #right-toggle {
+            position: absolute;
+            right: 304px; /* 280px panel + 24px gap */
+            top: 24px;
+            width: 18px;
+            height: 48px;
+            background: white;
+            border: 1px solid #e8e0f8;
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            cursor: pointer;
+            color: #c4a8f0;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: -3px 0 10px rgba(161, 0, 255, 0.07);
+            z-index: 50;
+            transition: right 0.3s ease, color 0.2s, background 0.2s;
+            user-select: none;
+        }
+        #right-toggle:hover { color: #a100ff; background: #f5efff; }
+        .workspace.right-collapsed #right-toggle { right: 0; }
+
         /* ── RIGHT PANEL (calc + news stacked) ── */
         .right-panel {
             position: absolute;
@@ -524,7 +551,10 @@
             flex-direction: column;
             gap: 12px;
             z-index: 10;
+            transition: width 0.3s ease;
+            overflow: hidden;
         }
+        .right-panel.collapsed { width: 0; }
 
         .calc-wrapper {
             width: 100%;
@@ -684,6 +714,9 @@
 
     </div><!-- /.workspace-body -->
 
+    <!-- RIGHT PANEL TOGGLE -->
+    <button id="right-toggle" onclick="toggleRightPanel()" title="Toggle right panel">›</button>
+
     <!-- RIGHT PANEL : calc + news stacked -->
     <div class="right-panel">
 
@@ -801,6 +834,17 @@
     btn.textContent = sidebar.classList.contains('collapsed') ? '›' : '‹';
   }
 
+  function toggleRightPanel() {
+    const panel     = document.querySelector('.right-panel');
+    const workspace = document.querySelector('.workspace');
+    const btn       = document.getElementById('right-toggle');
+    panel.classList.toggle('collapsed');
+    const collapsed = panel.classList.contains('collapsed');
+    workspace.classList.toggle('right-collapsed', collapsed);
+    btn.textContent = collapsed ? '‹' : '›';
+    localStorage.setItem('right-panel-collapsed', collapsed ? '1' : '0');
+  }
+
   // ── API Key & Model ───────────────────────────────────
   (function() {
     const keyInput = document.getElementById('api-key-input');
@@ -814,6 +858,12 @@
     if (localStorage.getItem('config-bar-visible') === '1') {
       document.querySelector('.config-bar').classList.add('visible');
       document.getElementById('config-toggle').classList.add('active');
+    }
+    // Restore right panel visibility
+    if (localStorage.getItem('right-panel-collapsed') === '1') {
+      document.querySelector('.right-panel').classList.add('collapsed');
+      document.querySelector('.workspace').classList.add('right-collapsed');
+      document.getElementById('right-toggle').textContent = '‹';
     }
   })();
 
