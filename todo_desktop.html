@@ -962,12 +962,16 @@
       return;
     }
 
-    // Read notes from iframe — graceful fallback if empty
+    // Read notes from iframe via innerHTML → strip tags locally (more reliable than innerText cross-frame)
     let notesText = '';
     try {
-      const frameWin = document.getElementById('notes-frame').contentWindow;
-      const frameEl  = frameWin.document.getElementById('notes-content');
-      if (frameEl) notesText = (frameEl.innerText || '').trim();
+      const frameWin  = document.getElementById('notes-frame').contentWindow;
+      const frameEl   = frameWin.document.getElementById('notes-content');
+      if (frameEl) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = frameEl.innerHTML;
+        notesText = (tmp.textContent || tmp.innerText || '').trim();
+      }
     } catch(e) {}
 
     const contextBlock = notesText
