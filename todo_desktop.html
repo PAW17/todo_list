@@ -1222,10 +1222,15 @@ Question: ${q}`;
   window.refreshNews = (_c, _id, btn, force) => loadAllNews(force, btn);
   loadAllNews();
 
-  // Ctrl+F → forward to notes iframe (browser find works natively inside iframe)
+  // Ctrl+F → open cross-tab search overlay in notes iframe
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key === 'f') {
-      document.getElementById('notes-frame')?.contentWindow?.focus();
+      e.preventDefault();
+      const frame = document.getElementById('notes-frame');
+      if (frame) {
+        frame.contentWindow.focus();
+        frame.contentWindow.postMessage({ type: 'open-search' }, '*');
+      }
     }
   });
   // ──────────────────────────────────────────────────────────

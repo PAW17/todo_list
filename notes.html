@@ -162,6 +162,37 @@
       color: #22c55e;
     }
 
+    /* ── SEARCH OVERLAY ── */
+    #search-overlay {
+      position: fixed;
+      top: 8px; left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      border: 1.5px solid #d4b8ff;
+      border-radius: 20px;
+      padding: 6px 14px;
+      box-shadow: 0 4px 20px rgba(161,0,255,0.15);
+      z-index: 1000;
+    }
+    #search-input {
+      border: none; outline: none;
+      font: inherit; font-size: 13px;
+      color: #333; background: transparent;
+      width: 180px;
+    }
+    #search-input::placeholder { color: #ccc; }
+    #search-counter { font-size: 11px; color: #bbb; white-space: nowrap; min-width: 30px; }
+    mark.sh { background: #fef08a; color: inherit; border-radius: 2px; }
+    .tab-match-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #fef08a; color: #666; font-size: 9px; font-weight: 700;
+      min-width: 14px; height: 14px; border-radius: 7px;
+      padding: 0 3px; margin-left: 2px; flex-shrink: 0;
+    }
+
     /* ── TABS ── */
     .tabs-area {
       margin-left: 10px;
@@ -298,6 +329,15 @@
   <button onclick="resizeImg(null)" title="Original">↺</button>
 </div>
 
+<div id="search-overlay">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+  <input type="text" id="search-input" placeholder="Search all notes…" oninput="doSearch(this.value)" onkeydown="if(event.key==='Escape')closeSearch()">
+  <span id="search-counter"></span>
+  <span onclick="closeSearch()" style="cursor:pointer;color:#ccc;font-size:14px;line-height:1;padding-left:4px;">✕</span>
+</div>
+
 <a class="nav-todo" href="index.html">☑ TODO</a>
 
 <script type="module">
@@ -330,6 +370,11 @@
   let _activeTab = '';
   let _saveTimer = null;
   let _dragId = null;
+
+  // ── Search state ────────────────────────────────────
+  let _searchActive = false;
+  let _searchCleanHtml = {};
+  let _currentSearchTerm = '';
 
   function genTabId() {
     return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -411,6 +456,7 @@
       });
       area.insertBefore(btn, addBtn);
     }
+    if (_searchActive && _currentSearchTerm) updateTabBadges(_currentSearchTerm);
   }
 
   function startRename(id, nameSpan) {
@@ -436,11 +482,20 @@
 
   async function switchTab(id) {
     if (id === _activeTab) return;
+    if (_searchActive && _searchCleanHtml[_activeTab] === undefined) {
+      _searchCleanHtml[_activeTab] = el.innerHTML;
+    }
     await flushSave();
     _activeTab = id;
-    el.innerHTML = _tabs[id]?.html || '';
+    el.innerHTML = _searchCleanHtml[id] !== undefined ? _searchCleanHtml[id] : (_tabs[id]?.html || '');
     set(ref(db, 'notes/activeTab'), id).catch(() => {});
     renderTabs();
+    if (_searchActive && _currentSearchTerm) {
+      if (_searchCleanHtml[id] === undefined) _searchCleanHtml[id] = el.innerHTML;
+      highlightInEl(el, _currentSearchTerm);
+      const first = el.querySelector('mark.sh');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   window.addTab = async function() {
@@ -479,17 +534,131 @@
     clearTimeout(_saveTimer);
     _saveTimer = null;
     if (!_activeTab || !_tabs[_activeTab]) return Promise.resolve();
-    _tabs[_activeTab].html = el.innerHTML;
+    const htmlToSave = (_searchActive && _searchCleanHtml[_activeTab] !== undefined)
+      ? _searchCleanHtml[_activeTab] : el.innerHTML;
+    _tabs[_activeTab].html = htmlToSave;
     _tabs[_activeTab].updatedAt = Date.now();
     return set(ref(db, 'notes/tabs/' + _activeTab), _tabs[_activeTab]).catch(() => {});
   }
+
+  // ── Cross-tab search ──────────────────────────────
+  window.openSearch = function() {
+    _searchActive = true;
+    if (_searchCleanHtml[_activeTab] === undefined) {
+      _searchCleanHtml[_activeTab] = el.innerHTML;
+    }
+    const overlay = document.getElementById('search-overlay');
+    overlay.style.display = 'flex';
+    const input = document.getElementById('search-input');
+    input.value = _currentSearchTerm || '';
+    input.focus();
+    if (input.value) doSearch(input.value);
+  };
+
+  window.closeSearch = function() {
+    _searchActive = false;
+    document.getElementById('search-overlay').style.display = 'none';
+    _currentSearchTerm = '';
+    if (_searchCleanHtml[_activeTab] !== undefined) {
+      el.innerHTML = _searchCleanHtml[_activeTab];
+    }
+    _searchCleanHtml = {};
+    document.querySelectorAll('.tab-match-badge').forEach(b => b.remove());
+    document.getElementById('search-counter').textContent = '';
+  };
+
+  function highlightInEl(element, term) {
+    if (!term) return 0;
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    let count = 0;
+    nodes.forEach(node => {
+      const text = node.textContent;
+      regex.lastIndex = 0;
+      if (!regex.test(text)) return;
+      regex.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0, match;
+      while ((match = regex.exec(text)) !== null) {
+        frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+        const mark = document.createElement('mark');
+        mark.className = 'sh';
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        last = regex.lastIndex;
+        count++;
+      }
+      frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    return count;
+  }
+
+  function countMatches(html, term) {
+    if (!term || !html) return 0;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const text = tmp.textContent || '';
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return (text.match(regex) || []).length;
+  }
+
+  function updateTabBadges(term) {
+    document.querySelectorAll('.tab-match-badge').forEach(b => b.remove());
+    if (!term) return;
+    const area = document.getElementById('tabs-area');
+    for (const [id, tab] of Object.entries(_tabs)) {
+      const html = id === _activeTab
+        ? (_searchCleanHtml[id] !== undefined ? _searchCleanHtml[id] : el.innerHTML)
+        : (tab.html || '');
+      const count = countMatches(html, term);
+      if (count > 0) {
+        const btn = area.querySelector('[data-id="' + id + '"]');
+        if (btn) {
+          const badge = document.createElement('span');
+          badge.className = 'tab-match-badge';
+          badge.textContent = count;
+          btn.appendChild(badge);
+        }
+      }
+    }
+  }
+
+  window.doSearch = function(term) {
+    _currentSearchTerm = term;
+    if (_searchCleanHtml[_activeTab] === undefined) {
+      _searchCleanHtml[_activeTab] = el.innerHTML;
+    }
+    el.innerHTML = _searchCleanHtml[_activeTab];
+    const counter = document.getElementById('search-counter');
+    if (!term) {
+      counter.textContent = '';
+      updateTabBadges('');
+      return;
+    }
+    const currentCount = highlightInEl(el, term);
+    let totalCount = currentCount;
+    for (const [id, tab] of Object.entries(_tabs)) {
+      if (id === _activeTab) continue;
+      totalCount += countMatches(tab.html || '', term);
+    }
+    counter.textContent = totalCount > 0 ? totalCount + '' : 'aucun';
+    counter.style.color = totalCount > 0 ? '#bbb' : '#ef4444';
+    updateTabBadges(term);
+    const first = el.querySelector('mark.sh');
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
 
   window.scheduleNotesSave = function() {
     clearTimeout(_saveTimer);
     setSyncBadge('pending', '⏳ Saving…');
     _saveTimer = setTimeout(() => {
       if (!_activeTab || !_tabs[_activeTab]) return;
-      _tabs[_activeTab].html = el.innerHTML;
+      const htmlToSave = (_searchActive && _searchCleanHtml[_activeTab] !== undefined)
+        ? _searchCleanHtml[_activeTab] : el.innerHTML;
+      _tabs[_activeTab].html = htmlToSave;
       _tabs[_activeTab].updatedAt = Date.now();
       set(ref(db, 'notes/tabs/' + _activeTab), _tabs[_activeTab])
         .then(() => setSyncBadge('saved', '✓ Synced'))
@@ -663,6 +832,19 @@
       e.preventDefault();
       insertLink();
     }
+    if (e.ctrlKey && e.key === 'f') {
+      e.preventDefault();
+      openSearch();
+    }
+    if (e.key === 'Escape' && _searchActive) {
+      e.preventDefault();
+      closeSearch();
+    }
+  });
+
+  // Listen for open-search message from parent frame
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'open-search') openSearch();
   });
 
   // ── Formatage ─────────────────────────────────────
