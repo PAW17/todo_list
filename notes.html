@@ -275,6 +275,12 @@
   <button class="fmt-clear" onclick="fmtClear()" title="Clear formatting">✕</button>
   <div class="fmt-sep"></div>
   <button class="fmt-btn" onclick="insertCheckbox()" title="Action item (Ctrl+Shift+A)">☐</button>
+  <button class="fmt-btn" onclick="insertLink()" title="Insert link (Ctrl+K)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+  </button>
   <div class="tabs-area" id="tabs-area">
     <button class="tab-add" onclick="addTab()" title="New page">+</button>
   </div>
@@ -647,9 +653,34 @@
       e.preventDefault();
       insertCheckbox();
     }
+    if (e.ctrlKey && e.key === 'k') {
+      e.preventDefault();
+      insertLink();
+    }
   });
 
   // ── Formatage ─────────────────────────────────────
+  window.insertLink = function() {
+    el.focus();
+    const sel = window.getSelection();
+    let url;
+    if (sel && !sel.isCollapsed) {
+      url = sel.toString().trim();
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    } else {
+      url = prompt('URL:');
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    }
+    document.execCommand('createLink', false, url);
+    // Ensure all links open in a new tab
+    el.querySelectorAll('a').forEach(a => {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    });
+    scheduleNotesSave();
+  };
+
   window.fmt = function(cmd) {
     document.execCommand(cmd, false, null);
     el.focus();
