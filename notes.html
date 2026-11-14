@@ -165,12 +165,14 @@
     /* ── SEARCH OVERLAY ── */
     #search-overlay {
       position: fixed;
-      top: 8px; left: 50%;
+      top: 96px; left: 50%;
       transform: translateX(-50%);
       display: none;
       align-items: center;
       gap: 8px;
-      background: white;
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       border: 1.5px solid #d4b8ff;
       border-radius: 20px;
       padding: 6px 14px;
