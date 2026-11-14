@@ -714,6 +714,13 @@
         </div>
         <span class="config-saved" id="config-saved">SAVED ✓</span>
     </div>
+    <div class="config-bar" style="border-top: 1px solid #f0e8ff; padding-top: 8px; gap: 8px;">
+        <span class="config-label" style="white-space:nowrap;">AI Persona</span>
+        <textarea id="ai-persona-input" rows="2"
+          oninput="savePersona()"
+          placeholder="Ex: Tu es un advisor Accenture. Tu réponds de façon concise et directe, en français. Tu utilises des bullet points quand c'est pertinent."
+          style="flex:1; resize:vertical; min-height:40px; max-height:120px; border:1px solid #e8e0f8; border-radius:8px; padding:6px 10px; font:inherit; font-size:11px; color:#4a4a4a; background:#f8f5ff; outline:none; line-height:1.4;"></textarea>
+    </div>
 
     <!-- BODY: notes + AI panel (fills space between config-bar and news-bar) -->
     <div class="workspace-body">
@@ -905,6 +912,18 @@
     else      { localStorage.removeItem('gemini-api-key'); saved.style.display = 'none'; }
   }
 
+  function savePersona() {
+    const val = document.getElementById('ai-persona-input').value.trim();
+    if (val) localStorage.setItem('gemini-persona', val);
+    else     localStorage.removeItem('gemini-persona');
+  }
+
+  // Load saved persona on startup
+  (function() {
+    const saved = localStorage.getItem('gemini-persona');
+    if (saved) document.getElementById('ai-persona-input').value = saved;
+  })();
+
   function saveWorkerUrl() {
     const url = document.getElementById('worker-url-input').value.trim();
     if (url) { localStorage.setItem('news-worker-url', url); loadAllNews(true); }
@@ -1013,10 +1032,13 @@ ${text}`;
 
     const modelsToTry = [selectedModel, ...GEMINI_FALLBACKS.filter(m => m !== selectedModel)];
 
-    const body = JSON.stringify({
+    const persona = localStorage.getItem('gemini-persona') || '';
+    const bodyObj = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3 }
-    });
+    };
+    if (persona) bodyObj.system_instruction = { parts: [{ text: persona }] };
+    const body = JSON.stringify(bodyObj);
 
     let lastError = '';
 
