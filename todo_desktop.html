@@ -270,14 +270,15 @@
         /* ── CONFIG BAR ── */
         .config-bar {
             display: none;
-            align-items: center;
-            gap: 20px;
+            flex-direction: column;
+            gap: 10px;
             background: white;
             border-radius: 12px;
             padding: 9px 16px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06);
             flex-shrink: 0;
         }
+        .config-row { display: flex; align-items: center; gap: 20px; }
         .config-group { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
         .config-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #bbb; white-space: nowrap; }
         .config-select { background: #f8f5ff; border: 1px solid #e8e0f8; border-radius: 8px; padding: 5px 8px; font-size: 12px; color: #4a4a4a; font-family: inherit; outline: none; cursor: pointer; max-width: 180px; }
@@ -682,44 +683,46 @@
 
     <!-- CONFIG BAR -->
     <div class="config-bar">
-        <div class="config-group">
-            <span class="config-label">Model</span>
-            <select id="model-select" class="config-select" onchange="saveModel()">
-                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Max free)</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
-                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-            </select>
-        </div>
-        <div class="config-group" style="flex:1">
-            <span class="config-label">Gemini Key</span>
-            <div class="config-key-wrap">
-                <input type="password" id="api-key-input" class="config-key-input" placeholder="AIzaSy..." oninput="saveApiKey()">
-                <span class="config-eye" onclick="toggleKeyVisibility()" title="Afficher / masquer">
-                    <svg id="eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </span>
+        <div class="config-row">
+            <div class="config-group">
+                <span class="config-label">Model</span>
+                <select id="model-select" class="config-select" onchange="saveModel()">
+                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Max free)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                    <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+                    <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                </select>
             </div>
-        </div>
-        <div class="config-group" style="flex:1">
-            <span class="config-label">News Worker</span>
-            <div class="config-key-wrap">
-                <input type="text" id="worker-url-input" class="config-key-input" placeholder="https://….workers.dev" oninput="saveWorkerUrl()">
+            <div class="config-group" style="flex:1">
+                <span class="config-label">Gemini Key</span>
+                <div class="config-key-wrap">
+                    <input type="password" id="api-key-input" class="config-key-input" placeholder="AIzaSy..." oninput="saveApiKey()">
+                    <span class="config-eye" onclick="toggleKeyVisibility()" title="Afficher / masquer">
+                        <svg id="eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </span>
+                </div>
             </div>
+            <div class="config-group" style="flex:1">
+                <span class="config-label">News Worker</span>
+                <div class="config-key-wrap">
+                    <input type="text" id="worker-url-input" class="config-key-input" placeholder="https://….workers.dev" oninput="saveWorkerUrl()">
+                </div>
+            </div>
+            <span class="config-saved" id="config-saved">SAVED ✓</span>
         </div>
-        <span class="config-saved" id="config-saved">SAVED ✓</span>
-    </div>
-    <div class="config-bar" style="border-top: 1px solid #f0e8ff; padding-top: 8px; gap: 8px;">
-        <span class="config-label" style="white-space:nowrap;">AI Persona</span>
-        <textarea id="ai-persona-input" rows="2"
-          oninput="savePersona()"
-          placeholder="Ex: Tu es un advisor Accenture. Tu réponds de façon concise et directe, en français. Tu utilises des bullet points quand c'est pertinent."
-          style="flex:1; resize:vertical; min-height:40px; max-height:120px; border:1px solid #e8e0f8; border-radius:8px; padding:6px 10px; font:inherit; font-size:11px; color:#4a4a4a; background:#f8f5ff; outline:none; line-height:1.4;"></textarea>
+        <div class="config-row" style="border-top: 1px solid #f0e8ff; padding-top: 8px; gap: 8px;">
+            <span class="config-label" style="white-space:nowrap;">AI Persona</span>
+            <textarea id="ai-persona-input" rows="2"
+              oninput="savePersona()"
+              placeholder="Ex: Tu es un advisor Accenture. Tu réponds de façon concise et directe, en français. Tu utilises des bullet points quand c'est pertinent."
+              style="flex:1; resize:vertical; min-height:40px; max-height:120px; border:1px solid #e8e0f8; border-radius:8px; padding:6px 10px; font:inherit; font-size:11px; color:#4a4a4a; background:#f8f5ff; outline:none; line-height:1.4;"></textarea>
+        </div>
     </div>
 
     <!-- BODY: notes + AI panel (fills space between config-bar and news-bar) -->
