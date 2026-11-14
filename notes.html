@@ -555,6 +555,12 @@
     scheduleNotesSave();
   };
 
+  // Links in contenteditable don't navigate natively — intercept and open manually
+  el.addEventListener('click', e => {
+    const link = e.target.closest('a[href]');
+    if (link) { e.preventDefault(); window.open(link.href, '_blank', 'noopener,noreferrer'); return; }
+  });
+
   el.addEventListener('click', e => {
     if (!e.target.classList.contains('chk')) return;
     const checked = e.target.textContent === '☑';
